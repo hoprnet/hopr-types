@@ -1,6 +1,46 @@
 [package]
-name = "lib"
-version = "0.1.0"
+name = "hopr-types"
+version = "1.0.0"
 edition = "2024"
 
+[features]
+default = [
+    "primitive",
+]
+rayon = [
+    "hopr-internal-types?/rayon",
+    "hopr-parallelize?/rayon",
+]
+runtime-tokio = [
+    "hopr-async-runtime?/runtime-tokio",
+    "hopr-network-types?/runtime-tokio",
+    "hopr-parallelize?/runtime-tokio"
+]
+serde = [
+    "hopr-network-types?/serde",
+    "hopr-crypto-types?/serde",
+    "hopr-internal-types?/serde",
+    "hopr-primitive-types?/serde"
+]
+
+async = ["dep:hopr-async-runtime"]
+chain = ["dep:hopr-chain-types"]
+crypto = ["dep:hopr-crypto-types"]
+internal = ["dep:hopr-internal-types"]
+metrics = ["dep:hopr-metrics"]
+network = ["dep:hopr-network-types"]
+parallelize = ["dep:hopr-parallelize"]
+primitive = ["dep:hopr-primitive-types"]
+random = ["dep:hopr-crypto-random"]
+
+
 [dependencies]
+hopr-async-runtime = { workspace = true, optional = true }
+hopr-chain-types = { workspace = true, optional = true }
+hopr-crypto-types = { workspace = true, optional = true }
+hopr-internal-types = { workspace = true, optional = true }
+hopr-metrics = { workspace = true, optional = true }
+hopr-network-types = { workspace = true, optional = true }
+hopr-parallelize = { workspace = true, optional = true }
+hopr-primitive-types = { workspace = true, optional = true }
+hopr-crypto-random = { workspace = true, optional = true }

@@ -14,7 +14,7 @@ crate-type = ["rlib"]
 
 [features]
 default = []
-serde = ["dep:serde", "dep:serde_bytes", "chrono/serde"]
+serde = ["dep:serde", "dep:serde_bytes", "chrono/serde", "primitive-types/serde"]
 
 [dependencies]
 bigdecimal = { workspace = true }
