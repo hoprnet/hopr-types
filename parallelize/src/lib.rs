@@ -52,7 +52,7 @@ pub mod cpu {
     pub use rayon;
 
     #[cfg(all(feature = "telemetry", not(test)))]
-    use opentelemetry::{global, KeyValue, metrics::{Counter, Meter, Gauge, Histogram}};
+    use opentelemetry::{global, KeyValue, metrics::{Counter, Meter, UpDownCounter, Histogram}};
 
     #[cfg(all(feature = "telemetry", not(test)))]
     lazy_static::lazy_static! {
@@ -89,12 +89,12 @@ pub mod cpu {
             .with_description("Time tasks spend executing in the Rayon thread pool")
             .with_boundaries(TIMING_BUCKETS.to_vec())
             .build();
-        static ref OUTSTANDING_TASKS: Gauge<f64> = METER
-            .f64_gauge("hopr_rayon_outstanding_tasks")
+        static ref OUTSTANDING_TASKS: UpDownCounter<i64> = METER
+            .i64_up_down_counter("hopr_rayon_outstanding_tasks")
             .with_description("Current number of tasks queued or running in the Rayon pool")
             .build();
-        static ref QUEUE_LIMIT_M: Gauge<f64> = METER
-            .f64_gauge("hopr_rayon_queue_limit")
+        static ref QUEUE_LIMIT_M: UpDownCounter<i64> = METER
+            .i64_up_down_counter("hopr_rayon_queue_limit")
             .with_description("Configured maximum outstanding tasks for the Rayon thread pool")
             .build();
     }
@@ -112,7 +112,7 @@ pub mod cpu {
 
             #[cfg(all(feature = "telemetry", not(test)))]
             if let Some(l) = limit {
-                QUEUE_LIMIT_M.record(l as f64, &[]);
+                QUEUE_LIMIT_M.add(l as i64, &[]);
             }
 
             limit
@@ -155,7 +155,7 @@ pub mod cpu {
         pub fn try_acquire_slot() -> Result<Self, SpawnError> {
             let prev = OUTSTANDING.fetch_add(1, Ordering::AcqRel);
             #[cfg(all(feature = "telemetry", not(test)))]
-            OUTSTANDING_TASKS.record(1.0, &[]);
+            OUTSTANDING_TASKS.add(1, &[]);
 
             let guard = Self;
 
@@ -178,7 +178,7 @@ pub mod cpu {
             let prev = OUTSTANDING.fetch_sub(1, Ordering::AcqRel);
             debug_assert!(prev > 0, "outstanding task count underflow");
             #[cfg(all(feature = "telemetry", not(test)))]
-            OUTSTANDING_TASKS.record(-1.0, &[]);
+            OUTSTANDING_TASKS.add(-1, &[]);
         }
     }
 

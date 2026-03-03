@@ -1,6 +1,6 @@
 [package]
 name = "hopr-parallelize"
-description = "Generic types used through the entire code base"
+description = "Utilities and types for parallel execution and concurrency."
 
 version.workspace = true
 authors.workspace = true
