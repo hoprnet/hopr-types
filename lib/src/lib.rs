@@ -14,10 +14,6 @@ pub use hopr_crypto_types as crypto;
 #[cfg(feature = "internal")]
 pub use hopr_internal_types as internal;
 
-/// Metrics tooling.
-#[cfg(feature = "metrics")]
-pub use hopr_metrics as metrics;
-
 /// Tooling for parallel processing (currently via Rayon).
 #[cfg(feature = "parallelize")]
 pub use hopr_parallelize as parallelize;

@@ -15,8 +15,8 @@ fixed-rng = [
     "hopr-crypto-types?/fixed-rng",
     "hopr-internal-types?/fixed-rng"
 ]
-prometheus = [
-    "hopr-parallelize?/prometheus"
+telemetry = [
+    "hopr-parallelize?/telemetry"
 ]
 rayon = [
     "hopr-internal-types?/rayon",
@@ -34,7 +34,6 @@ serde = [
 chain = ["dep:hopr-chain-types"]
 crypto = ["dep:hopr-crypto-types"]
 internal = ["dep:hopr-internal-types"]
-metrics = ["dep:hopr-metrics"]
 parallelize = ["dep:hopr-parallelize"]
 primitive = ["dep:hopr-primitive-types"]
 random = ["dep:hopr-crypto-random"]
@@ -43,7 +42,6 @@ random = ["dep:hopr-crypto-random"]
 hopr-chain-types = { workspace = true, optional = true }
 hopr-crypto-types = { workspace = true, optional = true }
 hopr-internal-types = { workspace = true, optional = true }
-hopr-metrics = { workspace = true, optional = true }
 hopr-parallelize = { workspace = true, optional = true }
 hopr-primitive-types = { workspace = true, optional = true }
 hopr-crypto-random = { workspace = true, optional = true }

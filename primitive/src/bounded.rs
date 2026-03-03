@@ -19,9 +19,7 @@ impl<const B: usize> TryFrom<u8> for BoundedSize<B> {
     type Error = GeneralError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        usize::try_from(value)
-            .map_err(|_| GeneralError::InvalidInput)
-            .and_then(Self::try_from)
+        usize::from(value).try_into()
     }
 }
 
@@ -29,9 +27,7 @@ impl<const B: usize> TryFrom<u16> for BoundedSize<B> {
     type Error = GeneralError;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
-        usize::try_from(value)
-            .map_err(|_| GeneralError::InvalidInput)
-            .and_then(Self::try_from)
+        usize::from(value).try_into()
     }
 }
 
@@ -71,9 +67,7 @@ impl<const B: usize> TryFrom<i8> for BoundedSize<B> {
     type Error = GeneralError;
 
     fn try_from(value: i8) -> Result<Self, Self::Error> {
-        isize::try_from(value)
-            .map_err(|_| GeneralError::InvalidInput)
-            .and_then(Self::try_from)
+        isize::from(value).try_into()
     }
 }
 
@@ -81,9 +75,7 @@ impl<const B: usize> TryFrom<i16> for BoundedSize<B> {
     type Error = GeneralError;
 
     fn try_from(value: i16) -> Result<Self, Self::Error> {
-        isize::try_from(value)
-            .map_err(|_| GeneralError::InvalidInput)
-            .and_then(Self::try_from)
+        isize::from(value).try_into()
     }
 }
 

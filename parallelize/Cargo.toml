@@ -16,17 +16,16 @@ crate-type = ["rlib"]
 default = ["rayon"]
 rayon = ["dep:rayon"]
 runtime-tokio = ["dep:tokio"]
-prometheus = ["dep:hopr-metrics"]
+telemetry = ["dep:opentelemetry"]
 
 [dependencies]
 futures = { workspace = true }
 lazy_static = { workspace = true }
+opentelemetry = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
-
-hopr-metrics = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = { workspace = true }
