@@ -1,11 +1,26 @@
 [package]
 name = "hopr-types"
 version = "1.0.0"
-edition = "2024"
+description = "Complete collection of Rust types used in Hoprnet and other related projects"
+homepage = "https://hoprnet.org/"
+repository = "https://github.com/hoprnet/hoprnet"
+license = "GPL-3.0-only"
+edition.workspace = true
+rust-version.workspace = true
 
 [features]
-default = [
-    "primitive",
+default = ["rayon"]
+capture = [
+    "hopr-network-types?/capture"
+]
+fixed-rng = [
+    "hopr-crypto-random?/fixed-rng",
+    "hopr-crypto-types?/fixed-rng",
+    "hopr-internal-types?/fixed-rng"
+]
+prometheus = [
+    "hopr-network-types?/prometheus",
+    "hopr-parallelize?/prometheus"
 ]
 rayon = [
     "hopr-internal-types?/rayon",
@@ -22,6 +37,7 @@ serde = [
     "hopr-internal-types?/serde",
     "hopr-primitive-types?/serde"
 ]
+
 
 async = ["dep:hopr-async-runtime"]
 chain = ["dep:hopr-chain-types"]

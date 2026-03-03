@@ -13,6 +13,7 @@ members = [
     "primitive",
     "random"
 ]
+default-members = ["lib"]
 
 [workspace.package]
 rust-version = "1.91"

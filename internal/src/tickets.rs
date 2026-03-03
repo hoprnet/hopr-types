@@ -391,7 +391,7 @@ impl TicketBuilder {
 
     /// Sets the [`Challenge`] for the Proof of Relay, converting it to [`EthereumChallenge`] first.
     ///
-    /// Either this method or [`Ticket::eth_challenge`] must be called.
+    /// Either this method or [`TicketBuilder::eth_challenge`] must be called.
     #[must_use]
     pub fn challenge(mut self, challenge: Challenge) -> Self {
         self.challenge = Some(challenge.to_ethereum_challenge());

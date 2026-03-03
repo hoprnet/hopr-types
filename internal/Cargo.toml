@@ -1,7 +1,6 @@
 [package]
 name = "hopr-internal-types"
 version = "0.18.0"
-authors = ["HOPR Association <tech@hoprnet.org>"]
 description = "Contains HOPR-specific types required internally by the HOPR node"
 edition.workspace = true
 rust-version.workspace = true
