@@ -2,10 +2,6 @@
 //!
 //! The individual types are feature-gated.
 
-/// Asynchronous runtime tooling.
-#[cfg(feature = "async")]
-pub use hopr_async_runtime as async_runtime;
-
 /// Blockchain-related types.
 #[cfg(feature = "chain")]
 pub use hopr_chain_types as chain;
@@ -21,10 +17,6 @@ pub use hopr_internal_types as internal;
 /// Metrics tooling.
 #[cfg(feature = "metrics")]
 pub use hopr_metrics as metrics;
-
-/// IP networking types for standard protocols such as TCP or UDP.
-#[cfg(feature = "network")]
-pub use hopr_network_types as network;
 
 /// Tooling for parallel processing (currently via Rayon).
 #[cfg(feature = "parallelize")]

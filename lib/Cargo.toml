@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.0.0"
+version = "1.1.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 homepage = "https://hoprnet.org/"
 repository = "https://github.com/hoprnet/hoprnet"
@@ -10,16 +10,12 @@ rust-version.workspace = true
 
 [features]
 default = ["rayon"]
-capture = [
-    "hopr-network-types?/capture"
-]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
     "hopr-crypto-types?/fixed-rng",
     "hopr-internal-types?/fixed-rng"
 ]
 prometheus = [
-    "hopr-network-types?/prometheus",
     "hopr-parallelize?/prometheus"
 ]
 rayon = [
@@ -27,36 +23,27 @@ rayon = [
     "hopr-parallelize?/rayon",
 ]
 runtime-tokio = [
-    "hopr-async-runtime?/runtime-tokio",
-    "hopr-network-types?/runtime-tokio",
     "hopr-parallelize?/runtime-tokio"
 ]
 serde = [
-    "hopr-network-types?/serde",
     "hopr-crypto-types?/serde",
     "hopr-internal-types?/serde",
     "hopr-primitive-types?/serde"
 ]
 
-
-async = ["dep:hopr-async-runtime"]
 chain = ["dep:hopr-chain-types"]
 crypto = ["dep:hopr-crypto-types"]
 internal = ["dep:hopr-internal-types"]
 metrics = ["dep:hopr-metrics"]
-network = ["dep:hopr-network-types"]
 parallelize = ["dep:hopr-parallelize"]
 primitive = ["dep:hopr-primitive-types"]
 random = ["dep:hopr-crypto-random"]
 
-
 [dependencies]
-hopr-async-runtime = { workspace = true, optional = true }
 hopr-chain-types = { workspace = true, optional = true }
 hopr-crypto-types = { workspace = true, optional = true }
 hopr-internal-types = { workspace = true, optional = true }
 hopr-metrics = { workspace = true, optional = true }
-hopr-network-types = { workspace = true, optional = true }
 hopr-parallelize = { workspace = true, optional = true }
 hopr-primitive-types = { workspace = true, optional = true }
 hopr-crypto-random = { workspace = true, optional = true }
