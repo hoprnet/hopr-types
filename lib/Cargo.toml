@@ -12,6 +12,9 @@ repository.workspace = true
 
 [features]
 default = ["rayon"]
+use-bindings = [
+    "hopr-chain-types?/use-bindings"
+]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
     "hopr-crypto-types?/fixed-rng",
