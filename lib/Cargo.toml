@@ -12,16 +12,10 @@ repository.workspace = true
 
 [features]
 default = ["rayon"]
-use-bindings = [
-    "hopr-chain-types?/use-bindings"
-]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
     "hopr-crypto-types?/fixed-rng",
     "hopr-internal-types?/fixed-rng"
-]
-telemetry = [
-    "hopr-parallelize?/telemetry"
 ]
 rayon = [
     "hopr-internal-types?/rayon",
@@ -34,6 +28,12 @@ serde = [
     "hopr-crypto-types?/serde",
     "hopr-internal-types?/serde",
     "hopr-primitive-types?/serde"
+]
+use-bindings = [
+    "hopr-chain-types?/use-bindings"
+]
+telemetry = [
+    "hopr-parallelize?/telemetry"
 ]
 
 chain = ["dep:hopr-chain-types"]
