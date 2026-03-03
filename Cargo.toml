@@ -16,6 +16,10 @@ default-members = ["lib"]
 rust-version = "1.91"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 edition = "2024"
+version = "1.0.1"
+homepage = "https://hoprnet.org/"
+repository = "https://github.com/hoprnet/hopr-types"
+license = "GPL-3.0-only"
 
 [workspace.dependencies]
 anyhow = "1.0.102"
