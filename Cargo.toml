@@ -2,13 +2,11 @@
 resolver = "2"
 
 members = [
-    "async-runtime",
     "chain",
     "crypto",
     "internal",
     "lib",
     "metrics",
-    "network",
     "parallelize",
     "primitive",
     "random"
@@ -98,7 +96,6 @@ typenum = "1.19.0"
 
 hopr-bindings = { git = "https://github.com/hoprnet/contracts", branch = "main", version = "4.7.0" }
 
-hopr-async-runtime = { path = "async-runtime"}
 hopr-types = { path = "lib" }
 hopr-parallelize = { path = "parallelize"}
 hopr-primitive-types = { path = "primitive"}
@@ -106,5 +103,4 @@ hopr-internal-types = { path = "internal" }
 hopr-crypto-random = { path = "random" }
 hopr-crypto-types = { path = "crypto" }
 hopr-chain-types = { path = "chain" }
-hopr-network-types = { path = "network" }
 hopr-metrics = { path = "metrics" }
