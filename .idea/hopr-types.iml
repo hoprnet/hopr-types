@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/async-runtime/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/chain/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crypto/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crypto/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/internal/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/metrics/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/network/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/parallelize/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/primitive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/random/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

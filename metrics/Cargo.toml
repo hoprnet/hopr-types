@@ -1,0 +1,22 @@
+[package]
+name = "hopr-metrics"
+version = "1.4.0"
+authors = ["HOPR Association <tech@hoprnet.org>"]
+edition.workspace = true
+rust-version.workspace = true
+description = "Rust module containing support for general hopr-metrics collection"
+homepage = "https://hoprnet.org/"
+repository = "https://github.com/hoprnet/hoprnet"
+license = "GPL-3.0-only"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+prometheus = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+
+[features]
+default = []
