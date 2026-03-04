@@ -1,22 +1,25 @@
 [package]
 name = "hopr-types"
-version = "1.0.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
-homepage = "https://hoprnet.org/"
-repository = "https://github.com/hoprnet/hoprnet"
-license = "GPL-3.0-only"
+
+version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [features]
 default = ["rayon"]
+
+all-types = [
+    "chain", "crypto", "internal", "parallelize", "primitive", "random"
+]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
     "hopr-crypto-types?/fixed-rng",
     "hopr-internal-types?/fixed-rng"
-]
-prometheus = [
-    "hopr-parallelize?/prometheus"
 ]
 rayon = [
     "hopr-internal-types?/rayon",
@@ -30,11 +33,16 @@ serde = [
     "hopr-internal-types?/serde",
     "hopr-primitive-types?/serde"
 ]
+use-bindings = [
+    "hopr-chain-types?/use-bindings"
+]
+telemetry = [
+    "hopr-parallelize?/telemetry"
+]
 
 chain = ["dep:hopr-chain-types"]
 crypto = ["dep:hopr-crypto-types"]
 internal = ["dep:hopr-internal-types"]
-metrics = ["dep:hopr-metrics"]
 parallelize = ["dep:hopr-parallelize"]
 primitive = ["dep:hopr-primitive-types"]
 random = ["dep:hopr-crypto-random"]
@@ -43,7 +51,6 @@ random = ["dep:hopr-crypto-random"]
 hopr-chain-types = { workspace = true, optional = true }
 hopr-crypto-types = { workspace = true, optional = true }
 hopr-internal-types = { workspace = true, optional = true }
-hopr-metrics = { workspace = true, optional = true }
 hopr-parallelize = { workspace = true, optional = true }
 hopr-primitive-types = { workspace = true, optional = true }
 hopr-crypto-random = { workspace = true, optional = true }

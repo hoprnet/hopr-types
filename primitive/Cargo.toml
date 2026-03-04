@@ -1,13 +1,14 @@
 [package]
 name = "hopr-primitive-types"
-version = "0.10.1"
-authors = ["HOPR Association <tech@hoprnet.org>"]
+description = "Generic types used through the entire code base"
+
+version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Generic types used through the entire code base"
-homepage = "https://hoprnet.org/"
-repository = "https://github.com/hoprnet/hoprnet"
-license = "GPL-3.0-only"
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["rlib"]

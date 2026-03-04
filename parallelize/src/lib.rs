@@ -9,7 +9,7 @@
 //!
 //! See the [`cpu`] module for the primary API.
 
-/// Module for thread pool-based parallelization of CPU-heavy blocking workloads.
+/// Module for thread-pool-based parallelization of CPU-heavy blocking workloads.
 ///
 /// ## Zombie Task Prevention
 ///
@@ -19,7 +19,7 @@
 /// continues as a "zombie" task whose result is discarded.
 ///
 /// Under sustained load, zombie accumulation can starve the pool: timed-out tasks
-/// continue occupying threads, causing subsequent tasks to also time out. To break
+/// continue occupying threads, causing later tasks to also time out. To break
 /// this cycle, each spawned closure checks `tx.is_canceled()` before executing.
 /// If the receiver was dropped while queued, the closure returns immediately.
 ///
@@ -36,7 +36,7 @@
 /// Prometheus metrics (behind the `prometheus` feature) track:
 /// - **submitted**: total tasks entering the queue
 /// - **completed**: tasks that delivered results to a live receiver
-/// - **cancelled**: tasks skipped via cooperative cancellation
+/// - **canceled**: tasks skipped via cooperative cancellation
 /// - **orphaned**: tasks that ran but whose receiver was dropped during execution
 /// - **rejected**: tasks rejected due to queue being full
 /// - **queue_wait**: histogram of queue wait time
@@ -48,147 +48,55 @@ pub mod cpu {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use futures::channel::oneshot;
+
     pub use rayon;
 
-    /// Histogram buckets for timing metrics (seconds).
-    #[cfg(all(feature = "prometheus", not(test)))]
-    const TIMING_BUCKETS: &[f64] = &[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.25, 0.5, 1.0];
+    #[cfg(all(feature = "telemetry", not(test)))]
+    use opentelemetry::{global, KeyValue, metrics::{Counter, Meter, UpDownCounter, Histogram}};
 
-    mod metrics {
-        #[cfg(any(not(feature = "prometheus"), test))]
-        pub use noop::*;
-        #[cfg(all(feature = "prometheus", not(test)))]
-        pub use real::*;
-
-        #[cfg(all(feature = "prometheus", not(test)))]
-        mod real {
-            use lazy_static::lazy_static;
-
-            lazy_static! {
-                static ref TASKS_SUBMITTED: hopr_metrics::SimpleCounter = hopr_metrics::SimpleCounter::new(
-                    "hopr_rayon_tasks_submitted_total",
-                    "Total number of tasks submitted to the Rayon thread pool",
-                )
-                .unwrap();
-                static ref TASKS_COMPLETED: hopr_metrics::SimpleCounter = hopr_metrics::SimpleCounter::new(
-                    "hopr_rayon_tasks_completed_total",
-                    "Total number of Rayon tasks that completed and delivered results",
-                )
-                .unwrap();
-                static ref TASKS_CANCELLED: hopr_metrics::SimpleCounter = hopr_metrics::SimpleCounter::new(
-                    "hopr_rayon_tasks_cancelled_total",
-                    "Total number of Rayon tasks skipped because receiver was already dropped",
-                )
-                .unwrap();
-                static ref TASKS_ORPHANED: hopr_metrics::SimpleCounter = hopr_metrics::SimpleCounter::new(
-                    "hopr_rayon_tasks_orphaned_total",
-                    "Total number of Rayon tasks whose results were discarded after completion",
-                )
-                .unwrap();
-                static ref TASKS_REJECTED: hopr_metrics::SimpleCounter = hopr_metrics::SimpleCounter::new(
-                    "hopr_rayon_tasks_rejected_total",
-                    "Total number of tasks rejected due to queue being full",
-                )
-                .unwrap();
-                static ref QUEUE_WAIT: hopr_metrics::SimpleHistogram = hopr_metrics::SimpleHistogram::new(
-                    "hopr_rayon_queue_wait_seconds",
-                    "Time tasks spend waiting in the Rayon queue before execution starts",
-                    super::super::TIMING_BUCKETS.to_vec(),
-                )
-                .unwrap();
-                static ref EXECUTION_TIME: hopr_metrics::MultiHistogram = hopr_metrics::MultiHistogram::new(
-                    "hopr_rayon_execution_seconds",
-                    "Time tasks spend executing in the Rayon thread pool",
-                    super::super::TIMING_BUCKETS.to_vec(),
-                    &["operation"],
-                )
-                .unwrap();
-                static ref OUTSTANDING_TASKS: hopr_metrics::SimpleGauge = hopr_metrics::SimpleGauge::new(
-                    "hopr_rayon_outstanding_tasks",
-                    "Current number of tasks queued or running in the Rayon pool",
-                )
-                .unwrap();
-                static ref QUEUE_LIMIT: hopr_metrics::SimpleGauge = hopr_metrics::SimpleGauge::new(
-                    "hopr_rayon_queue_limit",
-                    "Configured maximum outstanding tasks for the Rayon thread pool",
-                )
-                .unwrap();
-            }
-
-            #[inline]
-            pub fn submitted() {
-                TASKS_SUBMITTED.increment();
-            }
-
-            #[inline]
-            pub fn completed() {
-                TASKS_COMPLETED.increment();
-            }
-
-            #[inline]
-            pub fn cancelled() {
-                TASKS_CANCELLED.increment();
-            }
-
-            #[inline]
-            pub fn orphaned() {
-                TASKS_ORPHANED.increment();
-            }
-
-            #[inline]
-            pub fn rejected() {
-                TASKS_REJECTED.increment();
-            }
-
-            #[inline]
-            pub fn observe_queue_wait(seconds: f64) {
-                QUEUE_WAIT.observe(seconds);
-            }
-
-            #[inline]
-            pub fn observe_execution(operation: &str, seconds: f64) {
-                EXECUTION_TIME.observe(&[operation], seconds);
-            }
-
-            #[inline]
-            pub fn outstanding_inc() {
-                OUTSTANDING_TASKS.increment(1.0);
-            }
-
-            #[inline]
-            pub fn outstanding_dec() {
-                OUTSTANDING_TASKS.decrement(1.0);
-            }
-
-            #[inline]
-            pub fn set_queue_limit(limit: usize) {
-                QUEUE_LIMIT.set(limit as f64);
-            }
-        }
-
-        #[cfg(any(not(feature = "prometheus"), test))]
-        mod noop {
-            #[inline]
-            pub fn submitted() {}
-            #[inline]
-            pub fn completed() {}
-            #[inline]
-            pub fn cancelled() {}
-            #[inline]
-            pub fn orphaned() {}
-            #[inline]
-            pub fn rejected() {}
-            #[inline]
-            pub fn observe_queue_wait(_: f64) {}
-            #[inline]
-            pub fn observe_execution(_: &str, _: f64) {}
-            #[inline]
-            pub fn outstanding_inc() {}
-            #[inline]
-            pub fn outstanding_dec() {}
-            #[inline]
-            pub fn set_queue_limit(_: usize) {}
-        }
+    #[cfg(all(feature = "telemetry", not(test)))]
+    lazy_static::lazy_static! {
+        /// Histogram buckets for timing metrics (seconds).
+        static ref TIMING_BUCKETS: &'static [f64] = &[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.25, 0.5, 1.0];
+        static ref METER: Meter = global::meter("hopr-parallelize");
+        static ref TASKS_SUBMITTED: Counter<u64> = METER
+            .u64_counter("hopr_rayon_tasks_submitted_total")
+            .with_description("Total number of tasks submitted to the Rayon thread pool")
+            .build();
+        static ref TASKS_COMPLETED: Counter<u64> = METER
+            .u64_counter("hopr_rayon_tasks_completed_total")
+            .with_description("Total number of Rayon tasks that completed and delivered results")
+            .build();
+        static ref TASKS_CANCELLED: Counter<u64> = METER
+            .u64_counter("hopr_rayon_tasks_cancelled_total")
+            .with_description("Total number of Rayon tasks skipped because receiver was already dropped")
+            .build();
+        static ref TASKS_ORPHANED: Counter<u64> = METER
+            .u64_counter("hopr_rayon_tasks_orphaned_total")
+            .with_description("Total number of Rayon tasks whose results were discarded after completion")
+            .build();
+        static ref TASKS_REJECTED: Counter<u64> = METER
+            .u64_counter("hopr_rayon_tasks_rejected_total")
+            .with_description("Total number of tasks rejected due to queue being full")
+            .build();
+        static ref QUEUE_WAIT: Histogram<f64> = METER
+            .f64_histogram("hopr_rayon_queue_wait_seconds")
+            .with_description("Time tasks spend waiting in the Rayon queue before execution starts")
+            .with_boundaries(TIMING_BUCKETS.to_vec())
+            .build();
+        static ref EXECUTION_TIME: Histogram<f64> = METER
+            .f64_histogram("hopr_rayon_execution_seconds")
+            .with_description("Time tasks spend executing in the Rayon thread pool")
+            .with_boundaries(TIMING_BUCKETS.to_vec())
+            .build();
+        static ref OUTSTANDING_TASKS: UpDownCounter<i64> = METER
+            .i64_up_down_counter("hopr_rayon_outstanding_tasks")
+            .with_description("Current number of tasks queued or running in the Rayon pool")
+            .build();
+        static ref QUEUE_LIMIT_M: UpDownCounter<i64> = METER
+            .i64_up_down_counter("hopr_rayon_queue_limit")
+            .with_description("Configured maximum outstanding tasks for the Rayon thread pool")
+            .build();
     }
 
     /// Current number of outstanding tasks (queued + running).
@@ -202,8 +110,9 @@ pub mod cpu {
                 .and_then(|v| v.parse::<usize>().ok())
                 .filter(|&v| v > 0);
 
+            #[cfg(all(feature = "telemetry", not(test)))]
             if let Some(l) = limit {
-                metrics::set_queue_limit(l);
+                QUEUE_LIMIT_M.add(l as i64, &[]);
             }
 
             limit
@@ -245,13 +154,17 @@ pub mod cpu {
         /// Returns `Ok(())` if no limit or slot acquired, `Err(QueueFull)` if at limit.
         pub fn try_acquire_slot() -> Result<Self, SpawnError> {
             let prev = OUTSTANDING.fetch_add(1, Ordering::AcqRel);
-            metrics::outstanding_inc();
+            #[cfg(all(feature = "telemetry", not(test)))]
+            OUTSTANDING_TASKS.add(1, &[]);
+
             let guard = Self;
 
             if let Some(limit) = *QUEUE_LIMIT {
                 let new = prev + 1;
                 if new > limit {
-                    metrics::rejected();
+                    #[cfg(all(feature = "telemetry", not(test)))]
+                    TASKS_REJECTED.add(1, &[]);
+
                     return Err(SpawnError::QueueFull { current: prev, limit });
                 }
             }
@@ -264,7 +177,8 @@ pub mod cpu {
         fn drop(&mut self) {
             let prev = OUTSTANDING.fetch_sub(1, Ordering::AcqRel);
             debug_assert!(prev > 0, "outstanding task count underflow");
-            metrics::outstanding_dec();
+            #[cfg(all(feature = "telemetry", not(test)))]
+            OUTSTANDING_TASKS.add(-1, &[]);
         }
     }
 
@@ -308,7 +222,7 @@ pub mod cpu {
     /// execution begins, the task will still run to completion (counted as "orphaned").
     fn cancellable_task<R: Send + 'static>(
         f: impl FnOnce() -> R + Send + 'static,
-        operation: &'static str,
+        _operation: &'static str,
     ) -> Result<
         (
             impl FnOnce() + Send + 'static,
@@ -321,7 +235,8 @@ pub mod cpu {
         let (tx, rx) = oneshot::channel();
         let submitted_at = std::time::Instant::now();
 
-        metrics::submitted();
+        #[cfg(all(feature = "telemetry", not(test)))]
+        TASKS_SUBMITTED.add(1, &[]);
 
         let task = move || {
             // ensures guard is moved inside the closure, and
@@ -333,25 +248,35 @@ pub mod cpu {
                     queue_wait_ms = submitted_at.elapsed().as_millis() as u64,
                     "skipping cancelled task (receiver dropped before execution)"
                 );
-                metrics::cancelled();
+                #[cfg(all(feature = "telemetry", not(test)))]
+                TASKS_CANCELLED.add(1, &[]);
                 return;
             }
 
             let wait_duration = submitted_at.elapsed();
-            metrics::observe_queue_wait(wait_duration.as_secs_f64());
+            #[cfg(all(feature = "telemetry", not(test)))]
+            QUEUE_WAIT.record(wait_duration.as_secs_f64(), &[]);
 
-            let execution_start = std::time::Instant::now();
+            let _execution_start = std::time::Instant::now();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-            metrics::observe_execution(operation, execution_start.elapsed().as_secs_f64());
+            #[cfg(all(feature = "telemetry", not(test)))]
+            EXECUTION_TIME.record(
+                _execution_start.elapsed().as_secs_f64(),
+                &[KeyValue::new("operation", _operation.to_string())],
+            );
 
             match tx.send(result) {
-                Ok(()) => metrics::completed(),
+                Ok(()) => {
+                    #[cfg(all(feature = "telemetry", not(test)))]
+                    TASKS_COMPLETED.add(1, &[]);
+                },
                 Err(_) => {
                     tracing::debug!(
                         queue_wait_ms = wait_duration.as_millis() as u64,
                         "receiver dropped during execution, result discarded"
                     );
-                    metrics::orphaned();
+                    #[cfg(all(feature = "telemetry", not(test)))]
+                    TASKS_ORPHANED.add(1, &[]);
                 }
             }
         };
