@@ -12,6 +12,10 @@ repository.workspace = true
 
 [features]
 default = ["rayon"]
+
+all-types = [
+    "chain", "crypto", "internal", "parallelize", "primitive", "random"
+]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
     "hopr-crypto-types?/fixed-rng",
