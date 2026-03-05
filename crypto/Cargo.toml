@@ -32,8 +32,8 @@ allocator-jemalloc = [
 [dependencies]
 aes = { workspace = true }
 blake3 = { workspace = true }
-cipher = { workspace = true }
 chacha20 = { workspace = true }
+cipher = { workspace = true }
 ctr = { workspace = true }
 curve25519-dalek = { workspace = true }
 digest = { workspace = true }

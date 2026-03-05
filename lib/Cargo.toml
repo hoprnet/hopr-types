@@ -41,7 +41,7 @@ random = ["dep:hopr-crypto-random"]
 
 [dependencies]
 hopr-chain-types = { workspace = true, optional = true }
+hopr-crypto-random = { workspace = true, optional = true }
 hopr-crypto-types = { workspace = true, optional = true }
 hopr-internal-types = { workspace = true, optional = true }
 hopr-primitive-types = { workspace = true, optional = true }
-hopr-crypto-random = { workspace = true, optional = true }
