@@ -1,5 +1,24 @@
 use crate::errors::{GeneralError, GeneralError::ParseError, Result};
 
+/// Trait that defines 1:1 mapper between key identifiers and public keys.
+///
+/// This is used to uniquely map between short public key identifiers (commonly used in the Sphinx header),
+/// and actual routing addresses (public keys) of the nodes.
+pub trait KeyIdMapping<Id, K> {
+    /// Maps public key to its unique identifier.
+    fn map_key_to_id(&self, key: &K) -> Option<Id>;
+    /// Maps public key identifier to the actual public key.
+    fn map_id_to_public(&self, id: &Id) -> Option<K>;
+    /// Convenience method to map a slice of public keys to IDs.
+    fn map_keys_to_ids(&self, keys: &[K]) -> Vec<Option<Id>> {
+        keys.iter().map(|key| self.map_key_to_id(key)).collect()
+    }
+    /// Convenience method to map a slice of IDs to public keys.
+    fn map_ids_to_keys(&self, ids: &[Id]) -> Vec<Option<K>> {
+        ids.iter().map(|id| self.map_id_to_public(id)).collect()
+    }
+}
+
 /// A generic type that can be converted to a hexadecimal string.
 ///
 /// Implementors of this trait should automatically take care of the optional `0x` prefix.
