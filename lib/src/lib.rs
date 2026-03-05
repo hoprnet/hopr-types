@@ -14,10 +14,6 @@ pub use hopr_crypto_types as crypto;
 #[cfg(feature = "internal")]
 pub use hopr_internal_types as internal;
 
-/// Tooling for parallel processing (currently via Rayon).
-#[cfg(feature = "parallelize")]
-pub use hopr_parallelize as parallelize;
-
 /// Basic public types used in the HOPR protocol.
 #[cfg(feature = "primitive")]
 pub use hopr_primitive_types as primitive;

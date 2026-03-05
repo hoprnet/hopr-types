@@ -1,7 +1,7 @@
 use hopr_crypto_random::Randomizable;
 use hopr_crypto_types::prelude::*;
 #[cfg(feature = "rayon")]
-use hopr_parallelize::cpu::rayon::prelude::*;
+use rayon::prelude::*;
 use hopr_primitive_types::prelude::*;
 
 use crate::{

@@ -14,7 +14,7 @@ repository.workspace = true
 default = ["rayon"]
 
 all-types = [
-    "chain", "crypto", "internal", "parallelize", "primitive", "random"
+    "chain", "crypto", "internal", "primitive", "random"
 ]
 fixed-rng = [
     "hopr-crypto-random?/fixed-rng",
@@ -23,10 +23,6 @@ fixed-rng = [
 ]
 rayon = [
     "hopr-internal-types?/rayon",
-    "hopr-parallelize?/rayon",
-]
-runtime-tokio = [
-    "hopr-parallelize?/runtime-tokio"
 ]
 serde = [
     "hopr-crypto-types?/serde",
@@ -36,14 +32,10 @@ serde = [
 use-bindings = [
     "hopr-chain-types?/use-bindings"
 ]
-telemetry = [
-    "hopr-parallelize?/telemetry"
-]
 
 chain = ["dep:hopr-chain-types"]
 crypto = ["dep:hopr-crypto-types"]
 internal = ["dep:hopr-internal-types"]
-parallelize = ["dep:hopr-parallelize"]
 primitive = ["dep:hopr-primitive-types"]
 random = ["dep:hopr-crypto-random"]
 
@@ -51,6 +43,5 @@ random = ["dep:hopr-crypto-random"]
 hopr-chain-types = { workspace = true, optional = true }
 hopr-crypto-types = { workspace = true, optional = true }
 hopr-internal-types = { workspace = true, optional = true }
-hopr-parallelize = { workspace = true, optional = true }
 hopr-primitive-types = { workspace = true, optional = true }
 hopr-crypto-random = { workspace = true, optional = true }
