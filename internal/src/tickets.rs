@@ -14,6 +14,7 @@ use crate::{
     errors::CoreTypesError,
     prelude::{ChannelId, CoreTypesError::InvalidInputData, generate_channel_id},
 };
+use crate::prelude::ChannelEntry;
 
 /// Custom float to integer encoding used in the integer-only
 /// Ethereum Virtual Machine (EVM). Chosen to be easily
@@ -326,6 +327,13 @@ pub struct TicketBuilder {
 }
 
 impl TicketBuilder {
+    /// Maximum number of tokens that can be transferred in a single ticket: 10^25 wxHOPR.
+    pub const MAX_TICKET_AMOUNT: u128 = ChannelEntry::MAX_CHANNEL_BALANCE;
+    /// Maximum ticket index in a single channel epoch: 2^48 - 1.
+    pub const MAX_TICKET_INDEX: u64 = (1_u64 << 48) - 1;
+    /// Maximum channel epoch: 2^24 - 1.
+    pub const MAX_CHANNEL_EPOCH: u32 = (1_u32 << 24) - 1;
+
     /// Initializes the builder for a zero-hop ticket.
     #[must_use]
     pub fn zero_hop() -> Self {
@@ -365,6 +373,7 @@ impl TicketBuilder {
 
     /// Sets the ticket index.
     /// Must be less or equal to 2^48.
+    ///
     /// Defaults to 0.
     #[must_use]
     pub fn index(mut self, index: u64) -> Self {
@@ -374,6 +383,7 @@ impl TicketBuilder {
 
     /// Sets the channel epoch.
     /// Must be less or equal to 2^24.
+    ///
     /// Defaults to 1.
     #[must_use]
     pub fn channel_epoch(mut self, channel_epoch: u32) -> Self {
@@ -418,8 +428,8 @@ impl TicketBuilder {
     /// was set.
     pub fn build(self) -> errors::Result<Ticket> {
         let amount = match (self.amount, self.balance) {
-            (Some(amount), None) if amount.lt(&10_u128.pow(25).into()) => HoprBalance::from(amount),
-            (None, Some(balance)) if balance.amount().lt(&10_u128.pow(25).into()) => balance,
+            (Some(amount), None) if amount.lt(&Self::MAX_TICKET_AMOUNT.into()) => HoprBalance::from(amount),
+            (None, Some(balance)) if balance.amount().lt(&Self::MAX_TICKET_AMOUNT.into()) => balance,
             (None, None) => return Err(InvalidInputData("missing ticket amount".into())),
             (Some(_), Some(_)) => {
                 return Err(InvalidInputData(
@@ -433,13 +443,13 @@ impl TicketBuilder {
             }
         };
 
-        if self.index >= (1_u64 << 48) {
+        if self.index > Self::MAX_TICKET_INDEX {
             return Err(InvalidInputData(
                 "cannot hold ticket indices larger than 2^48 - 1".into(),
             ));
         }
 
-        if self.channel_epoch >= (1_u32 << 24) {
+        if self.channel_epoch > Self::MAX_CHANNEL_EPOCH {
             return Err(InvalidInputData(
                 "cannot hold channel epoch larger than 2^24 - 1".into(),
             ));
