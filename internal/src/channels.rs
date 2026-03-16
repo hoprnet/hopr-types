@@ -5,6 +5,8 @@ use std::{
 
 use hopr_crypto_types::prelude::*;
 use hopr_primitive_types::prelude::*;
+use crate::errors::CoreTypesError;
+use crate::prelude::TicketBuilder;
 
 /// Describes status of a channel
 #[derive(Copy, Clone, Debug, smart_default::SmartDefault, strum::Display, strum::EnumDiscriminants)]
@@ -68,6 +70,12 @@ impl PartialEq for ChannelStatus {
 }
 impl Eq for ChannelStatus {}
 
+impl std::hash::Hash for ChannelStatus {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        i8::from(*self).hash(state);
+    }
+}
+
 /// Describes a direction of node's own channel.
 /// The direction of a channel that is not own is undefined.
 #[repr(u8)]
@@ -123,8 +131,91 @@ impl<'a> From<&'a ChannelEntry> for ChannelParties {
     }
 }
 
+/// Builder for [`ChannelEntry`].
+#[derive(Debug, Copy, Clone, smart_default::SmartDefault)]
+pub struct ChannelBuilder {
+    source: Option<Address>,
+    destination: Option<Address>,
+    balance: Option<HoprBalance>,
+    #[default(0)]
+    ticket_index: u64,
+    #[default(ChannelStatus::Open)]
+    status: ChannelStatus,
+    #[default(1)]
+    channel_epoch: u32,
+}
+
+impl ChannelBuilder {
+    /// Source of the channel.
+    #[must_use]
+    pub fn source<A: Into<Address>>(mut self, source: A) -> Self {
+        self.source = Some(source.into());
+        self
+    }
+
+    /// Destination of the channel.
+    #[must_use]
+    pub fn destination<A: Into<Address>>(mut self, destination: A) -> Self {
+        self.destination = Some(destination.into());
+        self
+    }
+
+    /// Balance of the channel in wxHOPR tokens.
+    #[must_use]
+    pub fn balance<B: Into<U256>>(mut self, balance: B) -> Self {
+        self.balance = Some(HoprBalance::from(balance));
+        self
+    }
+
+    /// Ticket index of the channel.
+    ///
+    /// Default is 0, maximum is 2^48 - 1.
+    #[must_use]
+    pub fn ticket_index(mut self, ticket_index: u64) -> Self {
+        self.ticket_index = ticket_index;
+        self
+    }
+
+    /// Status of the channel.
+    ///
+    /// The default is [`ChannelStatus::Open`].
+    #[must_use]
+    pub fn status(mut self, status: ChannelStatus) -> Self {
+        self.status = status;
+        self
+    }
+
+    /// Epoch of the channel.
+    ///
+    /// Default is 1, maximum is 2^24 - 1.
+    #[must_use]
+    pub fn epoch(mut self, channel_epoch: u32) -> Self {
+        self.channel_epoch = channel_epoch;
+        self
+    }
+
+    /// Tries to build the [`ChannelEntry`].
+    ///
+    /// Values surpassing the allowed range will be clamped to the maximum allowed value.
+    pub fn build(self) -> crate::errors::Result<ChannelEntry> {
+        let source = self.source.ok_or(CoreTypesError::InvalidInputData("missing source".into()))?;
+        let destination = self.destination.ok_or(CoreTypesError::InvalidInputData("missing destination".into()))?;
+        Ok(ChannelEntry {
+            source,
+            destination,
+            balance: self.balance.ok_or(CoreTypesError::InvalidInputData("missing balance".into()))?.min(ChannelEntry::MAX_CHANNEL_BALANCE.into()),
+            ticket_index: self.ticket_index.min(TicketBuilder::MAX_TICKET_INDEX),
+            status: self.status,
+            channel_epoch: self.channel_epoch.min(TicketBuilder::MAX_CHANNEL_EPOCH),
+            id: generate_channel_id(&source, &destination),
+        })
+    }
+}
+
+
+
 /// Overall description of a channel
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChannelEntry {
     pub source: Address,
@@ -140,6 +231,7 @@ impl ChannelEntry {
     /// Maximum possible balance of a channel: 10^25 wxHOPR
     pub const MAX_CHANNEL_BALANCE: u128 = 10_u128.pow(25);
 
+    #[deprecated(since = "1.2.2", note = "use ChannelBuilder instead")]
     pub fn new(
         source: Address,
         destination: Address,
@@ -226,6 +318,13 @@ impl ChannelEntry {
     /// See [`ChannelChange`]
     pub fn diff(&self, other: &Self) -> Vec<ChannelChange> {
         ChannelChange::diff_channels(self, other)
+    }
+}
+
+impl std::hash::Hash for ChannelEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.id, state);
+        self.channel_epoch.hash(state);
     }
 }
 
@@ -391,7 +490,17 @@ mod tests {
 
     #[test]
     pub fn channel_entry_closure_time() {
-        let mut ce = ChannelEntry::new(*ADDRESS_1, *ADDRESS_2, 10.into(), 23, ChannelStatus::Open, 3);
+        let mut ce = ChannelBuilder::default()
+            .source(*ADDRESS_1)
+            .destination(*ADDRESS_2)
+            .balance(10)
+            .ticket_index(23)
+            .status(ChannelStatus::Open)
+            .epoch(3)
+            .build()
+            .expect(
+                "channel builder should be able to build a channel with valid parameters",
+            );
 
         assert!(
             !ce.closure_time_passed(SystemTime::now()),

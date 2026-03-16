@@ -12,7 +12,7 @@ members = [
 default-members = ["lib"]
 
 [workspace.package]
-version = "1.2.1"
+version = "1.2.2"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
 repository = "https://github.com/hoprnet/hopr-types"
