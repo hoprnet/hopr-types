@@ -210,7 +210,7 @@ impl ChannelBuilder {
 
     /// Tries to build the [`ChannelEntry`].
     ///
-    /// Values surpassing the allowed range will be clamped to the maximum allowed value.
+    /// Returns an error if values are out of range.
     pub fn build(self) -> crate::errors::Result<ChannelEntry> {
         let source = self.source.ok_or(CoreTypesError::InvalidInputData("missing source".into()))?;
         let destination = self.destination.ok_or(CoreTypesError::InvalidInputData("missing destination".into()))?;
