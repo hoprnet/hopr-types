@@ -441,11 +441,11 @@ impl PayloadGenerator for SafePayloadGenerator {
 
     fn fund_channel(&self, dest: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
         if dest.eq(&self.me) {
-            return Err(InvalidArguments("Cannot fund channel to self"));
+            return Err(InvalidArguments("cannot fund channel to self"));
         }
 
-        if amount.amount() > hopr_primitive_types::prelude::U256::from(ChannelEntry::MAX_CHANNEL_BALANCE) {
-            return Err(InvalidArguments("Cannot fund channel with amount larger than 96 bits"));
+        if amount.amount() > hopr_primitive_types::prelude::U256::from(ChannelBuilder::MAX_FUNDING_AMOUNT) {
+            return Err(InvalidArguments("cannot fund channel with amount larger than MAX_FUNDING_AMOUNT"));
         }
 
         let call_data = fundChannelSafeCall {
