@@ -231,7 +231,7 @@ impl ChannelEntry {
     /// Maximum possible balance of a channel: 10^25 wxHOPR
     pub const MAX_CHANNEL_BALANCE: u128 = 10_u128.pow(25);
 
-    #[deprecated(since = "1.2.2", note = "use ChannelBuilder instead")]
+    #[deprecated(since = "1.3.0", note = "use ChannelBuilder instead")]
     pub fn new(
         source: Address,
         destination: Address,
@@ -259,7 +259,7 @@ impl ChannelEntry {
     /// Checks if the closure time of this channel has passed.
     ///
     /// Also returns `false` if the channel closure has not been initiated (it is in `Open` state).
-    /// Returns also `true`, if the channel is in `Closed` state.
+    /// Returns also `true` if the channel is in `Closed` state.
     pub fn closure_time_passed(&self, current_time: SystemTime) -> bool {
         self.status.closure_time_elapsed(&current_time)
     }
@@ -489,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    pub fn channel_entry_closure_time() {
+    pub fn channel_entry_closure_time() -> anyhow::Result<()> {
         let mut ce = ChannelBuilder::default()
             .source(*ADDRESS_1)
             .destination(*ADDRESS_2)
@@ -497,10 +497,7 @@ mod tests {
             .ticket_index(23)
             .status(ChannelStatus::Open)
             .epoch(3)
-            .build()
-            .expect(
-                "channel builder should be able to build a channel with valid parameters",
-            );
+            .build()?;
 
         assert!(
             !ce.closure_time_passed(SystemTime::now()),
@@ -532,5 +529,7 @@ mod tests {
             Duration::ZERO,
             ce.remaining_closure_time(current_time).expect("must have closure time")
         );
+
+        Ok(())
     }
 }

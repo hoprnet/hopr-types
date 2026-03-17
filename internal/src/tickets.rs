@@ -374,6 +374,7 @@ impl TicketBuilder {
     }
 
     /// Sets the ticket index.
+    ///
     /// Must be less or equal to 2^48 - 1.
     ///
     /// Defaults to 0.
@@ -384,6 +385,7 @@ impl TicketBuilder {
     }
 
     /// Sets the channel epoch.
+    ///
     /// Must be less or equal to 2^24 - 1.
     ///
     /// Defaults to 1.
