@@ -153,6 +153,9 @@ impl ChannelBuilder {
     pub const MAX_CHANNEL_STAKE: u128 = (1 << 96) - 1;
 
     /// Source of the channel.
+    ///
+    /// Must be set along with [`ChannelBuilder::destination`], or [`ChannelBuilder::between`] may be used
+    /// to set both.
     #[must_use]
     pub fn source<A: Into<Address>>(mut self, source: A) -> Self {
         self.source = Some(source.into());
@@ -160,6 +163,9 @@ impl ChannelBuilder {
     }
 
     /// Destination of the channel.
+    ///
+    /// Must be set along with [`ChannelBuilder::source`], or [`ChannelBuilder::between`] may be used
+    /// to set both.
     #[must_use]
     pub fn destination<A: Into<Address>>(mut self, destination: A) -> Self {
         self.destination = Some(destination.into());
@@ -167,6 +173,8 @@ impl ChannelBuilder {
     }
 
     /// Sets both `source` and `destination` of the channel.
+    ///
+    /// This function or [`ChannelBuilder::source`] and [`ChannelBuilder::destination`] must be called.
     #[must_use]
     pub fn between<A: Into<Address>, B: Into<Address>>(mut self, source: A, destination: B) -> Self {
         self.source = Some(source.into());
@@ -174,10 +182,21 @@ impl ChannelBuilder {
         self
     }
 
-    /// Balance of the channel in wxHOPR tokens.
+    /// Sets the stake amount on the channel in wxHOPR tokens.
+    ///
+    /// This function or [`ChannelBuilder::balance`] must be called.
     #[must_use]
-    pub fn balance<B: Into<U256>>(mut self, balance: B) -> Self {
-        self.balance = Some(HoprBalance::from(balance));
+    pub fn amount<A: Into<U256>>(mut self, amount: A) -> Self {
+        self.balance = Some(HoprBalance::from(amount));
+        self
+    }
+
+    /// Sets specific [`HoprBalance`] as the stake on the channel.
+    ///
+    /// This function or [`ChannelBuilder::amount`] must be called.
+    #[must_use]
+    pub fn balance(mut self, balance: HoprBalance) -> Self {
+        self.balance = Some(balance);
         self
     }
 
@@ -244,16 +263,29 @@ impl ChannelBuilder {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChannelEntry {
+    /// Source address of the channel.
     pub source: Address,
+    /// Destination address of the channel.
     pub destination: Address,
+    /// Stake amount on the channel in wxHOPR tokens.
     pub balance: HoprBalance,
+    /// Next ticket index of the channel.
     pub ticket_index: u64,
+    /// Current status of the channel.
     pub status: ChannelStatus,
+    /// Epoch of the channel.
     pub channel_epoch: u32,
     id: ChannelId,
 }
 
 impl ChannelEntry {
+    /// Creates a new [`ChannelBuilder`].
+    #[must_use]
+    pub fn builder() -> ChannelBuilder {
+        ChannelBuilder::default()
+    }
+
+    /// **DEPRECATED** Construct a new channel entry.
     #[deprecated(since = "1.3.0", note = "use ChannelBuilder instead")]
     pub fn new(
         source: Address,
@@ -516,7 +548,7 @@ mod tests {
         let builder = ChannelBuilder::default()
             .source(Address::from_str("0x1234567890123456789012345678901234567890")?)
             .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
-            .balance(ChannelBuilder::MAX_CHANNEL_STAKE)
+            .amount(ChannelBuilder::MAX_CHANNEL_STAKE)
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
             .status(ChannelStatus::Open)
             .epoch(TicketBuilder::MAX_CHANNEL_EPOCH);
@@ -534,11 +566,11 @@ mod tests {
 
         let builder = builder
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
-            .balance(ChannelBuilder::MAX_CHANNEL_STAKE + 1);
+            .amount(ChannelBuilder::MAX_CHANNEL_STAKE + 1);
         assert!(builder.build().is_err());
 
         let builder = builder
-            .balance(TicketBuilder::MAX_TICKET_AMOUNT)
+            .amount(TicketBuilder::MAX_TICKET_AMOUNT)
             .epoch(TicketBuilder::MAX_CHANNEL_EPOCH + 1);
         assert!(builder.build().is_err());
 
@@ -550,7 +582,7 @@ mod tests {
         let mut ce = ChannelBuilder::default()
             .source(*ADDRESS_1)
             .destination(*ADDRESS_2)
-            .balance(10)
+            .amount(10)
             .ticket_index(23)
             .status(ChannelStatus::Open)
             .epoch(3)

@@ -585,6 +585,12 @@ impl Display for Ticket {
 }
 
 impl Ticket {
+    /// Creates a new [`TicketBuilder`].
+    #[must_use]
+    pub fn builder() -> TicketBuilder {
+        TicketBuilder::default()
+    }
+
     fn encode_tail_without_signature(&self) -> [u8; Self::SIZE - Address::SIZE - Signature::SIZE] {
         let mut ret = [0u8; Self::SIZE - Address::SIZE - Signature::SIZE];
         let mut offset = 0;
