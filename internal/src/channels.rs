@@ -146,6 +146,12 @@ pub struct ChannelBuilder {
 }
 
 impl ChannelBuilder {
+    /// Maximum possible funding amount channel: 10^25 wxHOPR
+    pub const MAX_FUNDING_AMOUNT: u128 = 10_u128.pow(25);
+
+    /// Maximum possible stake on the channel: 2^96 wxHOPR
+    pub const MAX_CHANNEL_STAKE: u128 = (1 << 96) - 1;
+
     /// Source of the channel.
     #[must_use]
     pub fn source<A: Into<Address>>(mut self, source: A) -> Self {
@@ -217,7 +223,7 @@ impl ChannelBuilder {
         Ok(ChannelEntry {
             source,
             destination,
-            balance: (balance <= ChannelEntry::MAX_CHANNEL_BALANCE.into())
+            balance: (balance <= Self::MAX_CHANNEL_STAKE.into())
                 .then_some(balance)
                 .ok_or(CoreTypesError::InvalidInputData("balance too high".into()))?,
             ticket_index: (self.ticket_index <= TicketBuilder::MAX_TICKET_INDEX)
@@ -248,9 +254,6 @@ pub struct ChannelEntry {
 }
 
 impl ChannelEntry {
-    /// Maximum possible balance of a channel: 10^25 wxHOPR
-    pub const MAX_CHANNEL_BALANCE: u128 = 10_u128.pow(25);
-
     #[deprecated(since = "1.3.0", note = "use ChannelBuilder instead")]
     pub fn new(
         source: Address,
@@ -513,7 +516,7 @@ mod tests {
         let builder = ChannelBuilder::default()
             .source(Address::from_str("0x1234567890123456789012345678901234567890")?)
             .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
-            .balance(TicketBuilder::MAX_TICKET_AMOUNT)
+            .balance(ChannelBuilder::MAX_CHANNEL_STAKE)
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
             .status(ChannelStatus::Open)
             .epoch(TicketBuilder::MAX_CHANNEL_EPOCH);
@@ -531,7 +534,7 @@ mod tests {
 
         let builder = builder
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
-            .balance(TicketBuilder::MAX_TICKET_AMOUNT + 1);
+            .balance(ChannelBuilder::MAX_CHANNEL_STAKE + 1);
         assert!(builder.build().is_err());
 
         let builder = builder

@@ -1,5 +1,8 @@
 //! This crate contains all types that are specific to the HOPR protocol.
-//! As opposed to `hopr-primitive-types` which contains more generic types (not necessarily specific only to HOPR).
+//! As opposed to `hopr-primitive-types` crate, which contains more generic types (not necessarily specific only to HOPR).
+//!
+//! NOTE: Be ready to be familiar with at least [RFC-0005](https://github.com/hoprnet/rfc/blob/main/rfcs/RFC-0005-proof-of-relay/0005-proof-of-relay.md)
+//! to understand the decisions on types defined in this crate.
 
 use std::fmt::Formatter;
 

@@ -14,7 +14,7 @@ use crate::{
     errors::CoreTypesError,
     prelude::{ChannelId, CoreTypesError::InvalidInputData, generate_channel_id},
 };
-use crate::prelude::ChannelEntry;
+use crate::prelude::ChannelBuilder;
 
 /// Custom float to integer encoding used in the integer-only
 /// Ethereum Virtual Machine (EVM). Chosen to be easily
@@ -328,7 +328,7 @@ pub struct TicketBuilder {
 
 impl TicketBuilder {
     /// Maximum number of tokens that can be transferred in a single ticket: 10^25 wxHOPR.
-    pub const MAX_TICKET_AMOUNT: u128 = ChannelEntry::MAX_CHANNEL_BALANCE;
+    pub const MAX_TICKET_AMOUNT: u128 = ChannelBuilder::MAX_FUNDING_AMOUNT;
     /// Maximum ticket index in a single channel epoch: 2^48 - 1.
     pub const MAX_TICKET_INDEX: u64 = (1_u64 << 48) - 1;
     /// Maximum channel epoch: 2^24 - 1.
