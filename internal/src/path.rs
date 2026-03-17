@@ -431,7 +431,7 @@ mod tests {
         ChannelBuilder::default()
             .source(src)
             .destination(dst)
-            .balance(1)
+            .amount(1)
             .status(status)
             .ticket_index(1)
             .epoch(1)

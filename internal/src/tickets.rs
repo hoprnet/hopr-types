@@ -353,7 +353,7 @@ impl TicketBuilder {
         self
     }
 
-    /// Sets the ticket amount.
+    /// Sets the ticket amount in wei wxHOPR.
     ///
     /// This or [`TicketBuilder::balance`] must be set and be less or equal to 10^25 - 1.
     #[must_use]
@@ -585,6 +585,12 @@ impl Display for Ticket {
 }
 
 impl Ticket {
+    /// Creates a new [`TicketBuilder`].
+    #[must_use]
+    pub fn builder() -> TicketBuilder {
+        TicketBuilder::default()
+    }
+
     fn encode_tail_without_signature(&self) -> [u8; Self::SIZE - Address::SIZE - Signature::SIZE] {
         let mut ret = [0u8; Self::SIZE - Address::SIZE - Signature::SIZE];
         let mut offset = 0;
