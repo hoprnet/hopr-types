@@ -159,7 +159,7 @@ impl ChannelBuilder {
         self.destination = Some(destination.into());
         self
     }
-    
+
     /// Sets both `source` and `destination` of the channel.
     #[must_use]
     pub fn between<A: Into<Address>, B: Into<Address>>(mut self, source: A, destination: B) -> Self {
@@ -226,7 +226,7 @@ impl ChannelBuilder {
             status: self.status,
             channel_epoch: (self.channel_epoch <= TicketBuilder::MAX_CHANNEL_EPOCH)
                 .then_some(self.channel_epoch)
-                .ok_or(CoreTypesError::InvalidInputData("invalid channel epoch too high".into()))?,
+                .ok_or(CoreTypesError::InvalidInputData("channel epoch too high".into()))?,
             id: generate_channel_id(&source, &destination),
         })
     }
