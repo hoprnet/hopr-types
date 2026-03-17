@@ -406,7 +406,7 @@ mod tests {
     use async_trait::async_trait;
     use hex_literal::hex;
     use parameterized::parameterized;
-
+    use crate::prelude::ChannelBuilder;
     use super::*;
 
     lazy_static::lazy_static! {
@@ -428,7 +428,15 @@ mod tests {
     }
 
     pub fn dummy_channel(src: Address, dst: Address, status: ChannelStatus) -> ChannelEntry {
-        ChannelEntry::new(src, dst, 1.into(), 1, status, 1)
+        ChannelBuilder::default()
+            .source(src)
+            .destination(dst)
+            .balance(1)
+            .status(status)
+            .ticket_index(1)
+            .epoch(1)
+            .build()
+            .expect("must be valid channel")
     }
 
     struct DummyResolver(Vec<ChannelEntry>);

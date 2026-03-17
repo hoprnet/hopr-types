@@ -159,6 +159,14 @@ impl ChannelBuilder {
         self.destination = Some(destination.into());
         self
     }
+    
+    /// Sets both `source` and `destination` of the channel.
+    #[must_use]
+    pub fn between<A: Into<Address>, B: Into<Address>>(mut self, source: A, destination: B) -> Self {
+        self.source = Some(source.into());
+        self.destination = Some(destination.into());
+        self
+    }
 
     /// Balance of the channel in wxHOPR tokens.
     #[must_use]
@@ -200,13 +208,25 @@ impl ChannelBuilder {
     pub fn build(self) -> crate::errors::Result<ChannelEntry> {
         let source = self.source.ok_or(CoreTypesError::InvalidInputData("missing source".into()))?;
         let destination = self.destination.ok_or(CoreTypesError::InvalidInputData("missing destination".into()))?;
+        let balance = self.balance.ok_or(CoreTypesError::InvalidInputData("missing balance".into()))?;
+
+        if source == destination {
+            return Err(CoreTypesError::InvalidInputData("source and destination cannot be the same".into()));
+        }
+
         Ok(ChannelEntry {
             source,
             destination,
-            balance: self.balance.ok_or(CoreTypesError::InvalidInputData("missing balance".into()))?.min(ChannelEntry::MAX_CHANNEL_BALANCE.into()),
-            ticket_index: self.ticket_index.min(TicketBuilder::MAX_TICKET_INDEX),
+            balance: (balance <= ChannelEntry::MAX_CHANNEL_BALANCE.into())
+                .then_some(balance)
+                .ok_or(CoreTypesError::InvalidInputData("balance too high".into()))?,
+            ticket_index: (self.ticket_index <= TicketBuilder::MAX_TICKET_INDEX)
+                .then_some(self.ticket_index)
+                .ok_or(CoreTypesError::InvalidInputData("ticket index too high".into()))?,
             status: self.status,
-            channel_epoch: self.channel_epoch.min(TicketBuilder::MAX_CHANNEL_EPOCH),
+            channel_epoch: (self.channel_epoch <= TicketBuilder::MAX_CHANNEL_EPOCH)
+                .then_some(self.channel_epoch)
+                .ok_or(CoreTypesError::InvalidInputData("invalid channel epoch too high".into()))?,
             id: generate_channel_id(&source, &destination),
         })
     }
@@ -489,7 +509,41 @@ mod tests {
     }
 
     #[test]
-    pub fn channel_entry_closure_time() -> anyhow::Result<()> {
+    fn channel_builder_should_reject_invalid_values() -> anyhow::Result<()> {
+        let builder = ChannelBuilder::default()
+            .source(Address::from_str("0x1234567890123456789012345678901234567890")?)
+            .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
+            .balance(TicketBuilder::MAX_TICKET_AMOUNT)
+            .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
+            .status(ChannelStatus::Open)
+            .epoch(TicketBuilder::MAX_CHANNEL_EPOCH);
+
+        assert!(builder.build().is_ok());
+
+        let builder = builder
+            .destination(Address::from_str("0x1234567890123456789012345678901234567890")?);
+        assert!(builder.build().is_err());
+
+        let builder = builder
+            .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
+            .ticket_index(TicketBuilder::MAX_TICKET_INDEX + 1);
+        assert!(builder.build().is_err());
+
+        let builder = builder
+            .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
+            .balance(TicketBuilder::MAX_TICKET_AMOUNT + 1);
+        assert!(builder.build().is_err());
+
+        let builder = builder
+            .balance(TicketBuilder::MAX_TICKET_AMOUNT)
+            .epoch(TicketBuilder::MAX_CHANNEL_EPOCH + 1);
+        assert!(builder.build().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn channel_entry_closure_time() -> anyhow::Result<()> {
         let mut ce = ChannelBuilder::default()
             .source(*ADDRESS_1)
             .destination(*ADDRESS_2)
