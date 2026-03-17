@@ -353,7 +353,7 @@ impl TicketBuilder {
         self
     }
 
-    /// Sets the ticket amount.
+    /// Sets the ticket amount in wei wxHOPR.
     ///
     /// This or [`TicketBuilder::balance`] must be set and be less or equal to 10^25 - 1.
     #[must_use]

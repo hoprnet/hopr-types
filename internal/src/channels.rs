@@ -182,7 +182,7 @@ impl ChannelBuilder {
         self
     }
 
-    /// Sets the stake amount on the channel in wxHOPR tokens.
+    /// Sets the stake amount on the channel in wei wxHOPR tokens.
     ///
     /// This function or [`ChannelBuilder::balance`] must be called.
     #[must_use]
