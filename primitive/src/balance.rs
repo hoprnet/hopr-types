@@ -62,6 +62,30 @@ impl Currency for WxHOPR {
     const SCALE: usize = 18;
 }
 
+/// Represents xHOPR token [`Currency`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct XHOPR;
+
+impl Display for XHOPR {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", Self::NAME)
+    }
+}
+
+impl FromStr for XHOPR {
+    type Err = GeneralError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::name_matches(s).map(|_| Self)
+    }
+}
+
+impl Currency for XHOPR {
+    const NAME: &'static str = "xHOPR";
+    const SCALE: usize = 18;
+}
+
 /// Represents xDai coin [`Currency`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
