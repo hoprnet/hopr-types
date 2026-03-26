@@ -350,6 +350,8 @@ impl<C: Currency> UnitaryFloatOps for Balance<C> {
 
 pub type HoprBalance = Balance<WxHOPR>;
 
+pub type XHoprBalance = Balance<XHOPR>;
+
 pub type XDaiBalance = Balance<XDai>;
 
 #[cfg(test)]
