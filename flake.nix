@@ -62,6 +62,8 @@
           # Platform information
           buildPlatform = pkgs.stdenv.buildPlatform;
 
+          sharedExcludes = [ ".gcloudignore" ];
+
           # Import nix-lib for this system
           nixLib = nix-lib.lib.${system};
 
@@ -104,11 +106,10 @@
               commitizen.enable = true;
             };
             tools = pkgs;
-            excludes = [
+            excludes = sharedExcludes ++ [
               "vendor/"
               "ethereum/contracts/"
               "ethereum/bindings/src/codegen"
-              ".gcloudignore"
             ];
           };
 
@@ -153,14 +154,13 @@
           treefmt = {
             inherit (config.flake-root) projectRootFile;
 
-            settings.global.excludes = [
+            settings.global.excludes = sharedExcludes ++ [
               "**/*.id"
               "**/.cargo-ok"
               "**/.gitignore"
               ".actrc"
               ".dockerignore"
               ".editorconfig"
-              ".gcloudignore"
               ".gitattributes"
               ".yamlfmt"
               "LICENSE"
