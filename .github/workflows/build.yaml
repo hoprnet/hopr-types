@@ -43,6 +43,7 @@ jobs:
       architecture: ${{ matrix.architecture }}
       build_command: ${{ matrix.build_command }}
       runner: ${{ matrix.runner }}
+      timeout_minutes: 120
       enabled: ${{ matrix.required_label == '' || contains(github.event.pull_request.labels.*.name, matrix.required_label) }}
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
