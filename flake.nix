@@ -207,7 +207,7 @@
             programs.ruff-format.enable = true;
 
             settings.formatter.rustfmt = {
-              command = "${stableToolchain}/bin/rustfmt";
+              command = "${pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default)}/bin/rustfmt";
             };
           };
 
