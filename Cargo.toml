@@ -11,6 +11,9 @@ members = [
 ]
 default-members = ["lib"]
 
+[workspace.metadata.crane]
+name = "hopr-types"
+
 [workspace.package]
 version = "1.4.0"
 authors = ["HOPR Association <tech@hoprnet.org>"]
