@@ -3,13 +3,15 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use hopr_crypto_types::prelude::*;
-use hopr_primitive_types::prelude::*;
 use crate::errors::CoreTypesError;
 use crate::prelude::TicketBuilder;
+use hopr_crypto_types::prelude::*;
+use hopr_primitive_types::prelude::*;
 
 /// Describes status of a channel
-#[derive(Copy, Clone, Debug, smart_default::SmartDefault, strum::Display, strum::EnumDiscriminants)]
+#[derive(
+    Copy, Clone, Debug, smart_default::SmartDefault, strum::Display, strum::EnumDiscriminants,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[strum_discriminants(vis(pub))]
 #[strum_discriminants(derive(strum::FromRepr, strum::EnumCount), repr(i8))]
@@ -176,7 +178,11 @@ impl ChannelBuilder {
     ///
     /// This function or [`ChannelBuilder::source`] and [`ChannelBuilder::destination`] must be called.
     #[must_use]
-    pub fn between<A: Into<Address>, B: Into<Address>>(mut self, source: A, destination: B) -> Self {
+    pub fn between<A: Into<Address>, B: Into<Address>>(
+        mut self,
+        source: A,
+        destination: B,
+    ) -> Self {
         self.source = Some(source.into());
         self.destination = Some(destination.into());
         self
@@ -231,12 +237,20 @@ impl ChannelBuilder {
     ///
     /// Returns an error if values are out of range.
     pub fn build(self) -> crate::errors::Result<ChannelEntry> {
-        let source = self.source.ok_or(CoreTypesError::InvalidInputData("missing source".into()))?;
-        let destination = self.destination.ok_or(CoreTypesError::InvalidInputData("missing destination".into()))?;
-        let balance = self.balance.ok_or(CoreTypesError::InvalidInputData("missing balance".into()))?;
+        let source = self
+            .source
+            .ok_or(CoreTypesError::InvalidInputData("missing source".into()))?;
+        let destination = self.destination.ok_or(CoreTypesError::InvalidInputData(
+            "missing destination".into(),
+        ))?;
+        let balance = self
+            .balance
+            .ok_or(CoreTypesError::InvalidInputData("missing balance".into()))?;
 
         if source == destination {
-            return Err(CoreTypesError::InvalidInputData("source and destination cannot be the same".into()));
+            return Err(CoreTypesError::InvalidInputData(
+                "source and destination cannot be the same".into(),
+            ));
         }
 
         Ok(ChannelEntry {
@@ -247,17 +261,19 @@ impl ChannelBuilder {
                 .ok_or(CoreTypesError::InvalidInputData("balance too high".into()))?,
             ticket_index: (self.ticket_index <= TicketBuilder::MAX_TICKET_INDEX)
                 .then_some(self.ticket_index)
-                .ok_or(CoreTypesError::InvalidInputData("ticket index too high".into()))?,
+                .ok_or(CoreTypesError::InvalidInputData(
+                    "ticket index too high".into(),
+                ))?,
             status: self.status,
             channel_epoch: (self.channel_epoch <= TicketBuilder::MAX_CHANNEL_EPOCH)
                 .then_some(self.channel_epoch)
-                .ok_or(CoreTypesError::InvalidInputData("channel epoch too high".into()))?,
+                .ok_or(CoreTypesError::InvalidInputData(
+                    "channel epoch too high".into(),
+                ))?,
             id: generate_channel_id(&source, &destination),
         })
     }
 }
-
-
 
 /// Overall description of a channel
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -325,7 +341,9 @@ impl ChannelEntry {
     pub fn remaining_closure_time(&self, current_time: SystemTime) -> Option<Duration> {
         match self.status {
             ChannelStatus::Open => None,
-            ChannelStatus::PendingToClose(closure_time) => Some(closure_time.saturating_sub(current_time)),
+            ChannelStatus::PendingToClose(closure_time) => {
+                Some(closure_time.saturating_sub(current_time))
+            }
             ChannelStatus::Closed => Some(Duration::ZERO),
         }
     }
@@ -399,11 +417,17 @@ pub fn generate_channel_id(source: &Address, destination: &Address) -> Hash {
 pub enum ChannelChange {
     /// Channel status has changed
     #[strum(to_string = "status change: {left} -> {right}")]
-    Status { left: ChannelStatus, right: ChannelStatus },
+    Status {
+        left: ChannelStatus,
+        right: ChannelStatus,
+    },
 
     /// Channel balance has changed
     #[strum(to_string = "balance change: {left} -> {right}")]
-    Balance { left: HoprBalance, right: HoprBalance },
+    Balance {
+        left: HoprBalance,
+        right: HoprBalance,
+    },
 
     /// Channel epoch has changed
     #[strum(to_string = "epoch change: {left} -> {right}")]
@@ -515,7 +539,10 @@ mod tests {
         let from = Address::from_str("0xa460f2e47c641b64535f5f4beeb9ac6f36f9d27c")?;
         let to = Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?;
         let id = generate_channel_id(&from, &to).to_string();
-        assert_eq!("0x1a410210ce7265f3070bf0e8885705dce452efcfbd90a5467525d136fcefc64a", id);
+        assert_eq!(
+            "0x1a410210ce7265f3070bf0e8885705dce452efcfbd90a5467525d136fcefc64a",
+            id
+        );
 
         Ok(())
     }
@@ -532,7 +559,10 @@ mod tests {
 
     #[test]
     fn channel_status_repr_compat() {
-        assert_eq!(ChannelStatusDiscriminants::Open as i8, i8::from(ChannelStatus::Open));
+        assert_eq!(
+            ChannelStatusDiscriminants::Open as i8,
+            i8::from(ChannelStatus::Open)
+        );
         assert_eq!(
             ChannelStatusDiscriminants::Closed as i8,
             i8::from(ChannelStatus::Closed)
@@ -546,8 +576,12 @@ mod tests {
     #[test]
     fn channel_builder_should_reject_invalid_values() -> anyhow::Result<()> {
         let builder = ChannelBuilder::default()
-            .source(Address::from_str("0x1234567890123456789012345678901234567890")?)
-            .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
+            .source(Address::from_str(
+                "0x1234567890123456789012345678901234567890",
+            )?)
+            .destination(Address::from_str(
+                "0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1",
+            )?)
             .amount(ChannelBuilder::MAX_CHANNEL_STAKE)
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX)
             .status(ChannelStatus::Open)
@@ -555,12 +589,15 @@ mod tests {
 
         assert!(builder.build().is_ok());
 
-        let builder = builder
-            .destination(Address::from_str("0x1234567890123456789012345678901234567890")?);
+        let builder = builder.destination(Address::from_str(
+            "0x1234567890123456789012345678901234567890",
+        )?);
         assert!(builder.build().is_err());
 
         let builder = builder
-            .destination(Address::from_str("0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1")?)
+            .destination(Address::from_str(
+                "0xb8b75fef7efdf4530cf1688c933d94e4e519ccd1",
+            )?)
             .ticket_index(TicketBuilder::MAX_TICKET_INDEX + 1);
         assert!(builder.build().is_err());
 
@@ -613,10 +650,14 @@ mod tests {
 
         let current_time = current_time.add(Duration::from_secs(120));
 
-        assert!(ce.closure_time_passed(current_time), "must have passed closure time");
+        assert!(
+            ce.closure_time_passed(current_time),
+            "must have passed closure time"
+        );
         assert_eq!(
             Duration::ZERO,
-            ce.remaining_closure_time(current_time).expect("must have closure time")
+            ce.remaining_closure_time(current_time)
+                .expect("must have closure time")
         );
 
         Ok(())

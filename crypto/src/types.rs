@@ -37,7 +37,8 @@ use crate::{
 };
 
 pub(crate) fn affine_point_from_bytes(bytes: &[u8]) -> Result<AffinePoint> {
-    let ep = k256::EncodedPoint::from_bytes(bytes).map_err(|_| InvalidInputValue("affine_point_from_bytes"))?;
+    let ep = k256::EncodedPoint::from_bytes(bytes)
+        .map_err(|_| InvalidInputValue("affine_point_from_bytes"))?;
     AffinePoint::from_encoded_point(&ep)
         .into_option()
         .ok_or(InvalidInputValue("affine_point_from_bytes"))
@@ -84,7 +85,10 @@ impl Challenge {
     ///
     /// Note that this is an expensive operation that involves point decompression of the
     /// both [`HalfKeyChallenges`](HalfKeyChallenge).
-    pub fn from_hint_and_share(own_share: &HalfKeyChallenge, hint: &HalfKeyChallenge) -> Result<Self> {
+    pub fn from_hint_and_share(
+        own_share: &HalfKeyChallenge,
+        hint: &HalfKeyChallenge,
+    ) -> Result<Self> {
         #[cfg(not(feature = "rust-ecdsa"))]
         {
             let own_share = secp256k1::PublicKey::from_byte_array_compressed(own_share.0)
@@ -96,13 +100,18 @@ impl Challenge {
             let res = own_share.combine(&hint).map_err(|_| CalculationError)?;
 
             affine_point_from_bytes(&res.serialize_uncompressed())
-                .and_then(|p| NonIdentity::new(p).into_option().ok_or(CryptoError::InvalidPublicKey))
+                .and_then(|p| {
+                    NonIdentity::new(p)
+                        .into_option()
+                        .ok_or(CryptoError::InvalidPublicKey)
+                })
                 .map(Self)
         }
 
         #[cfg(feature = "rust-ecdsa")]
         {
-            let own_share: k256::ProjectivePoint = affine_point_from_bytes(own_share.as_ref())?.into();
+            let own_share: k256::ProjectivePoint =
+                affine_point_from_bytes(own_share.as_ref())?.into();
 
             let hint: k256::ProjectivePoint = affine_point_from_bytes(hint.as_ref())?.into();
 
@@ -118,7 +127,10 @@ impl Challenge {
     ///
     /// Note that this is an expensive operation that involves point decompression of the
     /// both [`HalfKeyChallenge`] and scalar multiplication of the [`HalfKey`] with the basepoint.
-    pub fn from_own_share_and_half_key(own_share: &HalfKeyChallenge, half_key: &HalfKey) -> Result<Self> {
+    pub fn from_own_share_and_half_key(
+        own_share: &HalfKeyChallenge,
+        half_key: &HalfKey,
+    ) -> Result<Self> {
         Self::from_hint_and_share(own_share, &half_key.to_challenge()?)
     }
 }
@@ -178,7 +190,9 @@ impl TryFrom<&[u8]> for HalfKey {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Ok(Self(value.try_into().map_err(|_| ParseError("HalfKey".into()))?))
+        Ok(Self(
+            value.try_into().map_err(|_| ParseError("HalfKey".into()))?,
+        ))
     }
 }
 
@@ -195,7 +209,9 @@ impl BytesRepresentable for HalfKey {
 /// The value is internally stored as a compressed point encoded as a byte-array.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct HalfKeyChallenge(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE]);
+pub struct HalfKeyChallenge(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
 
 impl Display for HalfKeyChallenge {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -232,7 +248,9 @@ impl TryFrom<&[u8]> for HalfKeyChallenge {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         Ok(Self(
-            value.try_into().map_err(|_| ParseError("HalfKeyChallenge".into()))?,
+            value
+                .try_into()
+                .map_err(|_| ParseError("HalfKeyChallenge".into()))?,
         ))
     }
 }
@@ -437,11 +455,15 @@ impl TryFrom<&[u8]> for OffchainPublicKey {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        let compressed = CompressedEdwardsY::from_slice(value).map_err(|_| ParseError("OffchainPublicKey".into()))?;
+        let compressed = CompressedEdwardsY::from_slice(value)
+            .map_err(|_| ParseError("OffchainPublicKey".into()))?;
         let edwards = compressed
             .decompress()
             .ok_or(ParseError("OffchainPublicKey.decompress".into()))?;
-        Ok(Self { compressed, edwards })
+        Ok(Self {
+            compressed,
+            edwards,
+        })
     }
 }
 
@@ -497,8 +519,9 @@ impl OffchainPublicKey {
     /// Tries to create the public key from a Ed25519 private key.
     /// The length must be exactly `ed25519_dalek::SECRET_KEY_LENGTH`.
     pub fn from_privkey(private_key: &[u8]) -> Result<Self> {
-        let mut pk: [u8; ed25519_dalek::SECRET_KEY_LENGTH] =
-            private_key.try_into().map_err(|_| InvalidInputValue("private_key"))?;
+        let mut pk: [u8; ed25519_dalek::SECRET_KEY_LENGTH] = private_key
+            .try_into()
+            .map_err(|_| InvalidInputValue("private_key"))?;
         let sk = libp2p_identity::ed25519::SecretKey::try_from_bytes(&mut pk)
             .map_err(|_| InvalidInputValue("private_key"))?;
         let kp: libp2p_identity::ed25519::Keypair = sk.into();
@@ -564,7 +587,11 @@ pub type PacketTag = [u8; PACKET_TAG_LENGTH];
 /// The `AsRef` implementation will always return the compressed representation.
 /// However, the `TryFrom` byte slice accepts any representation.
 #[derive(Copy, Clone)]
-pub struct PublicKey(NonIdentity<AffinePoint>, [u8; Self::SIZE_COMPRESSED], Address);
+pub struct PublicKey(
+    NonIdentity<AffinePoint>,
+    [u8; Self::SIZE_COMPRESSED],
+    Address,
+);
 
 impl PublicKey {
     /// Size of the compressed public key in bytes
@@ -602,7 +629,11 @@ impl PublicKey {
 
             let pk = secp256k1::PublicKey::from_secret_key_global(&sk);
             affine_point_from_bytes(&pk.serialize_uncompressed())
-                .and_then(|p| NonIdentity::new(p).into_option().ok_or(CryptoError::InvalidPublicKey))
+                .and_then(|p| {
+                    NonIdentity::new(p)
+                        .into_option()
+                        .ok_or(CryptoError::InvalidPublicKey)
+                })
                 .map(Self::from)
         }
     }
@@ -672,8 +703,10 @@ impl TryFrom<&[u8]> for PublicKey {
             }
             Self::SIZE_UNCOMPRESSED_PLAIN => {
                 // add 0x04 prefix
-                let key = elliptic_curve::PublicKey::<Secp256k1>::from_sec1_bytes(&[&[4u8], value].concat())
-                    .map_err(|_| GeneralError::ParseError("invalid secp256k1 point".into()))?;
+                let key = elliptic_curve::PublicKey::<Secp256k1>::from_sec1_bytes(
+                    &[&[4u8], value].concat(),
+                )
+                .map_err(|_| GeneralError::ParseError("invalid secp256k1 point".into()))?;
 
                 Ok(key.to_nonidentity().into())
             }
@@ -785,8 +818,10 @@ impl Response {
     /// This is done by adding together the two non-zero scalars that the given half-keys represent.
     /// Returns an error if any of the given scalars is zero.
     pub fn from_half_keys(first: &HalfKey, second: &HalfKey) -> Result<Self> {
-        let first = NonZeroScalar::<Secp256k1>::try_from(first.as_ref()).map_err(|_| InvalidInputValue("first"))?;
-        let second = NonZeroScalar::<Secp256k1>::try_from(second.as_ref()).map_err(|_| InvalidInputValue("second"))?;
+        let first = NonZeroScalar::<Secp256k1>::try_from(first.as_ref())
+            .map_err(|_| InvalidInputValue("first"))?;
+        let second = NonZeroScalar::<Secp256k1>::try_from(second.as_ref())
+            .map_err(|_| InvalidInputValue("second"))?;
 
         // This addition is modulo order the order of the secp256k1 prime field
         let res = first.as_ref() + second.as_ref();
@@ -810,7 +845,11 @@ impl TryFrom<&[u8]> for Response {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Ok(Self(value.try_into().map_err(|_| ParseError("Response".into()))?))
+        Ok(Self(
+            value
+                .try_into()
+                .map_err(|_| ParseError("Response".into()))?,
+        ))
     }
 }
 
@@ -835,7 +874,9 @@ pub trait Pseudonym: BytesRepresentable + hash::Hash + Eq + Display + Randomizab
 /// Represents a simple UUID-like pseudonym consisting of 10 bytes.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SimplePseudonym(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] pub [u8; Self::SIZE]);
+pub struct SimplePseudonym(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] pub [u8; Self::SIZE],
+);
 
 impl Display for SimplePseudonym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -893,17 +934,21 @@ mod tests {
 
     use crate::{
         keypairs::{Keypair, OffchainKeypair},
-        types::{Challenge, HalfKey, HalfKeyChallenge, Hash, OffchainPublicKey, PublicKey, Response},
+        types::{
+            Challenge, HalfKey, HalfKeyChallenge, Hash, OffchainPublicKey, PublicKey, Response,
+        },
     };
 
-    const PUBLIC_KEY: [u8; 33] = hex!("021464586aeaea0eb5736884ca1bf42d165fc8e2243b1d917130fb9e321d7a93b8");
+    const PUBLIC_KEY: [u8; 33] =
+        hex!("021464586aeaea0eb5736884ca1bf42d165fc8e2243b1d917130fb9e321d7a93b8");
     const PUBLIC_KEY_UNCOMPRESSED_PLAIN: [u8; 64] = hex!(
         "1464586aeaea0eb5736884ca1bf42d165fc8e2243b1d917130fb9e321d7a93b8fb0699d4f177f9c84712f6d7c5f6b7f4f6916116047fa25c79ef806fc6c9523e"
     );
     const PUBLIC_KEY_UNCOMPRESSED: [u8; 65] = hex!(
         "041464586aeaea0eb5736884ca1bf42d165fc8e2243b1d917130fb9e321d7a93b8fb0699d4f177f9c84712f6d7c5f6b7f4f6916116047fa25c79ef806fc6c9523e"
     );
-    const PRIVATE_KEY: [u8; 32] = hex!("e17fe86ce6e99f4806715b0c9412f8dad89334bf07f72d5834207a9d8f19d7f8");
+    const PRIVATE_KEY: [u8; 32] =
+        hex!("e17fe86ce6e99f4806715b0c9412f8dad89334bf07f72d5834207a9d8f19d7f8");
 
     #[test]
     fn test_public_key_to_hex() -> anyhow::Result<()> {
@@ -941,7 +986,10 @@ mod tests {
 
         let compressed: &[u8] = pk1.as_ref();
         assert_eq!(PublicKey::SIZE_COMPRESSED, compressed.len());
-        assert_eq!(PublicKey::SIZE_UNCOMPRESSED, pk1.to_uncompressed_bytes().len());
+        assert_eq!(
+            PublicKey::SIZE_UNCOMPRESSED,
+            pk1.to_uncompressed_bytes().len()
+        );
 
         let shorter = hex!(
             "f85e38b056284626a7aed0acc5d474605a408e6cccf76d7241ec7b4dedb31929b710e034f4f9a7dba97743b01e1cc35a45a60bebb29642cb0ba6a7fe8433316c"
@@ -984,11 +1032,17 @@ mod tests {
 
     #[test]
     fn test_offchain_public_key_peerid() -> anyhow::Result<()> {
-        let valid_peerid = PeerId::from_str("12D3KooWLYKsvDB4xEELYoHXxeStj2gzaDXjra2uGaFLpKCZkJHs")?;
+        let valid_peerid =
+            PeerId::from_str("12D3KooWLYKsvDB4xEELYoHXxeStj2gzaDXjra2uGaFLpKCZkJHs")?;
         let valid = OffchainPublicKey::from_peerid(&valid_peerid)?;
-        assert_eq!(valid_peerid, valid.into(), "must work with ed25519 peer ids");
+        assert_eq!(
+            valid_peerid,
+            valid.into(),
+            "must work with ed25519 peer ids"
+        );
 
-        let invalid_peerid = PeerId::from_str("16Uiu2HAmPHGyJ7y1Rj3kJ64HxJQgM9rASaeT2bWfXF9EiX3Pbp3K")?;
+        let invalid_peerid =
+            PeerId::from_str("16Uiu2HAmPHGyJ7y1Rj3kJ64HxJQgM9rASaeT2bWfXF9EiX3Pbp3K")?;
         let invalid = OffchainPublicKey::from_peerid(&invalid_peerid);
         assert!(invalid.is_err(), "must not work with secp256k1 peer ids");
 
@@ -1022,7 +1076,10 @@ mod tests {
     fn test_half_key_challenge() -> anyhow::Result<()> {
         let hkc1 = HalfKeyChallenge::try_from(PUBLIC_KEY.as_ref())?;
         let hkc2 = HalfKeyChallenge::try_from(hkc1.as_ref())?;
-        assert_eq!(hkc1, hkc2, "failed to match deserialized half key challenge");
+        assert_eq!(
+            hkc1, hkc2,
+            "failed to match deserialized half key challenge"
+        );
 
         Ok(())
     }
@@ -1038,12 +1095,21 @@ mod tests {
         let half_chal2 = hk2.to_challenge()?;
 
         let challenge1 = Challenge::from_hint_and_share(&half_chal1, &half_chal2)?;
-        assert_eq!(challenge1, Challenge::from_hint_and_share(&half_chal2, &half_chal1)?);
-        assert_eq!(challenge1, Challenge::from_own_share_and_half_key(&half_chal1, &hk2)?);
+        assert_eq!(
+            challenge1,
+            Challenge::from_hint_and_share(&half_chal2, &half_chal1)?
+        );
+        assert_eq!(
+            challenge1,
+            Challenge::from_own_share_and_half_key(&half_chal1, &hk2)?
+        );
 
         let challenge2 = response.to_challenge()?;
         assert_eq!(challenge1, challenge2);
-        assert_eq!(challenge1.to_ethereum_challenge(), challenge2.to_ethereum_challenge());
+        assert_eq!(
+            challenge1.to_ethereum_challenge(),
+            challenge2.to_ethereum_challenge()
+        );
         Ok(())
     }
 
@@ -1061,7 +1127,9 @@ mod tests {
 
         assert_eq!(
             hash1.hash(),
-            Hash::try_from(hex!("1c4d8d521eccee7225073ea180e0fa075a6443afb7ca06076a9566b07d29470f").as_ref())?
+            Hash::try_from(
+                hex!("1c4d8d521eccee7225073ea180e0fa075a6443afb7ca06076a9566b07d29470f").as_ref()
+            )?
         );
 
         Ok(())

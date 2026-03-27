@@ -29,7 +29,9 @@ impl RoutingOptions {
     /// Otherwise, does nothing.
     pub fn invert(self) -> RoutingOptions {
         match self {
-            RoutingOptions::IntermediatePath(v) => RoutingOptions::IntermediatePath(v.into_iter().rev().collect()),
+            RoutingOptions::IntermediatePath(v) => {
+                RoutingOptions::IntermediatePath(v.into_iter().rev().collect())
+            }
             _ => self,
         }
     }
@@ -180,7 +182,9 @@ pub type HoprSurbId = [u8; SURB_ID_SIZE];
 /// with the same pseudonym.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct HoprSenderId(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE]);
+pub struct HoprSenderId(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
 
 impl std::fmt::Debug for HoprSenderId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -234,7 +238,10 @@ impl HoprSenderId {
             let hash = HashFast::create(&[&i.to_be_bytes(), prev.as_ref()]);
             Some((
                 i + 1,
-                Self::from_pseudonym_and_id(&prev.pseudonym(), hash.as_ref()[0..SURB_ID_SIZE].try_into().unwrap()),
+                Self::from_pseudonym_and_id(
+                    &prev.pseudonym(),
+                    hash.as_ref()[0..SURB_ID_SIZE].try_into().unwrap(),
+                ),
             ))
         })
         .map(|(_, v)| v)

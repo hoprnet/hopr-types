@@ -13,7 +13,9 @@ pub fn hash_bench(c: &mut Criterion) {
 
     group.bench_function("hash_keccak256", |b| b.iter(|| Hash::create(&[&data])));
 
-    group.bench_function("hash_fast_blake3", |b| b.iter(|| HashFast::create(&[&data])));
+    group.bench_function("hash_fast_blake3", |b| {
+        b.iter(|| HashFast::create(&[&data]))
+    });
 }
 
 criterion_group!(benches, hash_bench);

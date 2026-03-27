@@ -89,7 +89,9 @@ impl TryFrom<&[u8]> for Address {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Ok(Self(value.try_into().map_err(|_| ParseError("Address".into()))?))
+        Ok(Self(
+            value.try_into().map_err(|_| ParseError("Address".into()))?,
+        ))
     }
 }
 
@@ -147,7 +149,9 @@ impl TryFrom<&[u8]> for EthereumChallenge {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         Ok(Self(
-            value.try_into().map_err(|_| ParseError("EthereumChallenge".into()))?,
+            value
+                .try_into()
+                .map_err(|_| ParseError("EthereumChallenge".into()))?,
         ))
     }
 }
@@ -282,7 +286,9 @@ impl PartialOrd<Self> for SerializableLog {
 /// Identifier of public keys.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct KeyIdent<const N: usize = 4>(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; N]);
+pub struct KeyIdent<const N: usize = 4>(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; N],
+);
 
 impl<const N: usize> Display for KeyIdent<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -318,7 +324,11 @@ impl<const N: usize> TryFrom<&[u8]> for KeyIdent<N> {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Ok(Self(value.try_into().map_err(|_| ParseError("KeyIdent".into()))?))
+        Ok(Self(
+            value
+                .try_into()
+                .map_err(|_| ParseError("KeyIdent".into()))?,
+        ))
     }
 }
 
@@ -354,9 +364,15 @@ mod tests {
         let addr_2 = Address::try_from(addr_1.as_ref())?;
 
         assert_eq!(addr_1, addr_2, "deserialized address does not match");
-        assert_eq!(addr_1, Address::from_str("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")?);
+        assert_eq!(
+            addr_1,
+            Address::from_str("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")?
+        );
 
-        assert_eq!(addr_1, Address::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")?);
+        assert_eq!(
+            addr_1,
+            Address::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")?
+        );
 
         assert_eq!(addr_1, Address::from_str(&addr_1.to_hex())?);
 

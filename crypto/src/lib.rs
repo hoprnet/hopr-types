@@ -28,7 +28,8 @@ pub mod vrf;
 /// Re-exports from the generic cryptographic traits.
 pub mod crypto_traits {
     pub use cipher::{
-        Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit, KeySizeUser, StreamCipher, StreamCipherSeek,
+        Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit, KeySizeUser, StreamCipher,
+        StreamCipherSeek,
     };
     pub use digest::{Digest, FixedOutput, FixedOutputReset, Output, OutputSizeUser, Update};
     pub use hopr_crypto_random::Randomizable;
@@ -48,6 +49,7 @@ pub mod prelude {
     pub use libp2p_identity::PeerId;
 
     pub use super::{
-        crypto_traits, errors::CryptoError, keypairs::*, primitives::*, seal::*, signing::*, types::*, utils::*, vrf::*,
+        crypto_traits, errors::CryptoError, keypairs::*, primitives::*, seal::*, signing::*,
+        types::*, utils::*, vrf::*,
     };
 }

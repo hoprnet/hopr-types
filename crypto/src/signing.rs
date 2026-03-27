@@ -14,7 +14,11 @@ pub trait EcdsaEngine {
     /// Sign the given `hash` with the private key from the `chain_keypair`.
     fn sign_hash(hash: &Hash, chain_keypair: &ChainKeypair) -> Result<RawSignature, CryptoError>;
     /// Verify the given `signature` against the `hash` and the `public_key`.
-    fn verify_hash(signature: &RawSignature, hash: &Hash, public_key: &PublicKey) -> Result<bool, CryptoError>;
+    fn verify_hash(
+        signature: &RawSignature,
+        hash: &Hash,
+        public_key: &PublicKey,
+    ) -> Result<bool, CryptoError>;
     /// Recover the signer public key from the `signature` and the `hash`.
     fn recover_from_hash(signature: &RawSignature, hash: &Hash) -> Result<PublicKey, CryptoError>;
 }
@@ -35,11 +39,16 @@ impl EcdsaEngine for K256EcdsaSigningEngine {
         Ok((sig.to_bytes().into(), rec.to_byte()))
     }
 
-    fn verify_hash(signature: &RawSignature, hash: &Hash, public_key: &PublicKey) -> Result<bool, CryptoError> {
+    fn verify_hash(
+        signature: &RawSignature,
+        hash: &Hash,
+        public_key: &PublicKey,
+    ) -> Result<bool, CryptoError> {
         use k256::ecdsa::signature::hazmat::PrehashVerifier;
 
-        let pub_key = k256::ecdsa::VerifyingKey::from_sec1_bytes(&public_key.to_uncompressed_bytes())
-            .map_err(|_| CryptoError::InvalidInputValue("public key"))?;
+        let pub_key =
+            k256::ecdsa::VerifyingKey::from_sec1_bytes(&public_key.to_uncompressed_bytes())
+                .map_err(|_| CryptoError::InvalidInputValue("public key"))?;
 
         if let Ok(signature) = k256::ecdsa::Signature::try_from(signature.0.as_ref()) {
             Ok(pub_key.verify_prehash(hash.as_ref(), &signature).is_ok())
@@ -55,8 +64,9 @@ impl EcdsaEngine for K256EcdsaSigningEngine {
         let recid = k256::ecdsa::RecoveryId::try_from(signature.1)
             .map_err(|_| CryptoError::InvalidInputValue("signature.recid"))?;
 
-        let recovered_key = k256::ecdsa::VerifyingKey::recover_from_prehash(hash.as_ref(), &sig, recid)
-            .map_err(|_| CryptoError::SignatureVerification)?;
+        let recovered_key =
+            k256::ecdsa::VerifyingKey::recover_from_prehash(hash.as_ref(), &sig, recid)
+                .map_err(|_| CryptoError::SignatureVerification)?;
 
         (*recovered_key.as_affine()).try_into()
     }
@@ -73,13 +83,17 @@ impl EcdsaEngine for NativeEcdsaSigningEngine {
         let sk = secp256k1::SecretKey::from_byte_array(chain_keypair.secret().clone().into())
             .map_err(|_| CryptoError::InvalidInputValue("chain_keypair"))?;
 
-        let sig =
-            secp256k1::global::SECP256K1.sign_ecdsa_recoverable(secp256k1::Message::from_digest(hash.into()), &sk);
+        let sig = secp256k1::global::SECP256K1
+            .sign_ecdsa_recoverable(secp256k1::Message::from_digest(hash.into()), &sk);
         let (recid, sig) = sig.serialize_compact();
         Ok((sig, i32::from(recid) as u8))
     }
 
-    fn verify_hash(signature: &RawSignature, hash: &Hash, public_key: &PublicKey) -> Result<bool, CryptoError> {
+    fn verify_hash(
+        signature: &RawSignature,
+        hash: &Hash,
+        public_key: &PublicKey,
+    ) -> Result<bool, CryptoError> {
         let pk = secp256k1::PublicKey::from_slice(&public_key.to_uncompressed_bytes())
             .map_err(|_| CryptoError::InvalidInputValue("public key"))?;
 
@@ -102,7 +116,8 @@ impl EcdsaEngine for NativeEcdsaSigningEngine {
             .recover_ecdsa(secp256k1::Message::from_digest(hash.into()), &sig)
             .map_err(|_| CryptoError::SignatureVerification)?;
 
-        PublicKey::try_from(pk.serialize_uncompressed().as_ref()).map_err(|_| CryptoError::CalculationError)
+        PublicKey::try_from(pk.serialize_uncompressed().as_ref())
+            .map_err(|_| CryptoError::CalculationError)
     }
 }
 
@@ -155,13 +170,18 @@ impl<E: EcdsaEngine> ChainSignature<E> {
     #[inline]
     pub fn sign_hash(hash: &Hash, chain_keypair: &ChainKeypair) -> Self {
         Self::new(
-            E::sign_hash(hash, chain_keypair).expect("signing cannot fail: keypair always contains a valid secret key"),
+            E::sign_hash(hash, chain_keypair)
+                .expect("signing cannot fail: keypair always contains a valid secret key"),
         )
     }
 
     /// Verifies this signature against the given message and a public key object
     #[inline]
-    pub fn verify_message(&self, message: &[u8], public_key: &PublicKey) -> crate::errors::Result<bool> {
+    pub fn verify_message(
+        &self,
+        message: &[u8],
+        public_key: &PublicKey,
+    ) -> crate::errors::Result<bool> {
         self.verify_hash(&Hash::create(&[message]), public_key)
     }
 
@@ -201,7 +221,9 @@ impl<E> TryFrom<&[u8]> for ChainSignature<E> {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         Ok(Self(
-            value.try_into().map_err(|_| ParseError("Signature".into()))?,
+            value
+                .try_into()
+                .map_err(|_| ParseError("Signature".into()))?,
             PhantomData,
         ))
     }
@@ -220,7 +242,9 @@ pub type Signature = ChainSignature<K256EcdsaSigningEngine>;
 /// Represents an EdDSA signature using the Ed25519 Edwards curve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct OffchainSignature(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE]);
+pub struct OffchainSignature(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
 
 impl OffchainSignature {
     /// Sign the given message using the [`OffchainKeypair`].
@@ -247,10 +271,16 @@ impl OffchainSignature {
     }
 
     /// Performs optimized signature verification of multiple signed messages and public keys.
-    pub fn verify_batch<M: AsRef<[u8]>, I: IntoIterator<Item = ((M, OffchainSignature), OffchainPublicKey)>>(
+    pub fn verify_batch<
+        M: AsRef<[u8]>,
+        I: IntoIterator<Item = ((M, OffchainSignature), OffchainPublicKey)>,
+    >(
         entries: I,
     ) -> bool {
-        let (signed_msgs, pub_keys): (Vec<(M, OffchainSignature)>, Vec<ed25519_dalek::VerifyingKey>) = entries
+        let (signed_msgs, pub_keys): (
+            Vec<(M, OffchainSignature)>,
+            Vec<ed25519_dalek::VerifyingKey>,
+        ) = entries
             .into_iter()
             .map(|(a, b)| (a, ed25519_dalek::VerifyingKey::from(b.edwards)))
             .unzip();
@@ -309,7 +339,8 @@ mod tests {
     use super::*;
     use crate::keypairs::Keypair;
 
-    const PRIVATE_KEY: [u8; 32] = hex!("e17fe86ce6e99f4806715b0c9412f8dad89334bf07f72d5834207a9d8f19d7f8");
+    const PRIVATE_KEY: [u8; 32] =
+        hex!("e17fe86ce6e99f4806715b0c9412f8dad89334bf07f72d5834207a9d8f19d7f8");
 
     #[test]
     fn chain_signature_serialize() -> anyhow::Result<()> {
@@ -424,7 +455,9 @@ mod tests {
             .map(|i| format!("test_msg_{i}").as_bytes().to_vec())
             .collect::<Vec<_>>();
 
-        let kps = (0..100).map(|_| OffchainKeypair::random()).collect::<Vec<_>>();
+        let kps = (0..100)
+            .map(|_| OffchainKeypair::random())
+            .collect::<Vec<_>>();
 
         let tuples = (0..100)
             .map(|i| {

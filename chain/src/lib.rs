@@ -8,7 +8,9 @@ pub mod payload;
 
 #[cfg(feature = "use-bindings")]
 pub use {
-    hopr_bindings::{ContractAddresses, exports, exports::alloy::primitives::Address as AlloyAddress},
+    hopr_bindings::{
+        ContractAddresses, exports, exports::alloy::primitives::Address as AlloyAddress,
+    },
     parser::ParsedHoprChainAction,
 };
 

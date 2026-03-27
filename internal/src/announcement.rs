@@ -21,7 +21,10 @@ pub struct KeyBinding {
 impl KeyBinding {
     const SIGNING_SIZE: usize = 16 + Address::SIZE + OffchainPublicKey::SIZE;
 
-    fn prepare_for_signing(chain_key: &Address, packet_key: &OffchainPublicKey) -> [u8; Self::SIGNING_SIZE] {
+    fn prepare_for_signing(
+        chain_key: &Address,
+        packet_key: &OffchainPublicKey,
+    ) -> [u8; Self::SIGNING_SIZE] {
         let mut to_sign = [0u8; Self::SIGNING_SIZE];
         to_sign[0..16].copy_from_slice(b"HOPR_KEY_BINDING");
         to_sign[16..36].copy_from_slice(chain_key.as_ref());
@@ -92,7 +95,10 @@ impl AnnouncementData {
     /// The `multiaddress` must not be empty if present. It should be the external address of the node.
     /// It may contain a trailing PeerId (encapsulated multiaddr) or come without. If the
     /// peerId is present, it must match with the keybinding.
-    pub fn new(key_binding: KeyBinding, multiaddress: Option<Multiaddr>) -> Result<Self, GeneralError> {
+    pub fn new(
+        key_binding: KeyBinding,
+        multiaddress: Option<Multiaddr>,
+    ) -> Result<Self, GeneralError> {
         if let Some(multiaddress) = multiaddress {
             if multiaddress.is_empty() {
                 error!("Received empty multiaddr");
@@ -203,7 +209,10 @@ mod tests {
             let maddr: Multiaddr = ma_str.parse()?;
 
             let ad = AnnouncementData::new(key_binding, Some(maddr))?;
-            assert_eq!(Some(decapsulated_ma_str), ad.multiaddress().map(|m| m.to_string()));
+            assert_eq!(
+                Some(decapsulated_ma_str),
+                ad.multiaddress().map(|m| m.to_string())
+            );
             assert_eq!(&key_binding, ad.key_binding());
         }
 
@@ -254,7 +263,11 @@ mod tests {
             .with_p2p(OffchainKeypair::random().public().into())
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
-        assert_eq!(maddr_1, decapsulate_multiaddress(maddr_2), "multiaddresses must match");
+        assert_eq!(
+            maddr_1,
+            decapsulate_multiaddress(maddr_2),
+            "multiaddresses must match"
+        );
         assert_eq!(
             maddr_1,
             decapsulate_multiaddress(maddr_1.clone()),

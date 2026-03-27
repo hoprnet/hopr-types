@@ -43,8 +43,10 @@ impl std::fmt::Debug for VrfParameters {
 impl From<VrfParameters> for [u8; VRF_PARAMETERS_SIZE] {
     fn from(value: VrfParameters) -> Self {
         let mut ret = [0u8; VRF_PARAMETERS_SIZE];
-        ret[0..PublicKey::SIZE_COMPRESSED].copy_from_slice(value.V.to_encoded_point(true).as_bytes());
-        ret[PublicKey::SIZE_COMPRESSED..PublicKey::SIZE_COMPRESSED + 32].copy_from_slice(value.h.to_bytes().as_ref());
+        ret[0..PublicKey::SIZE_COMPRESSED]
+            .copy_from_slice(value.V.to_encoded_point(true).as_bytes());
+        ret[PublicKey::SIZE_COMPRESSED..PublicKey::SIZE_COMPRESSED + 32]
+            .copy_from_slice(value.h.to_bytes().as_ref());
         ret[PublicKey::SIZE_COMPRESSED + 32..PublicKey::SIZE_COMPRESSED + 64]
             .copy_from_slice(value.s.to_bytes().as_ref());
         ret
@@ -61,8 +63,10 @@ impl TryFrom<&[u8]> for VrfParameters {
             Ok(VrfParameters {
                 V: affine_point_from_bytes(&value[..PublicKey::SIZE_COMPRESSED])
                     .map_err(|_| GeneralError::ParseError("VrfParameters.V".into()))?,
-                h: k256_scalar_from_bytes(&value[PublicKey::SIZE_COMPRESSED..PublicKey::SIZE_COMPRESSED + 32])
-                    .map_err(|_| GeneralError::ParseError("VrfParameters.h".into()))?,
+                h: k256_scalar_from_bytes(
+                    &value[PublicKey::SIZE_COMPRESSED..PublicKey::SIZE_COMPRESSED + 32],
+                )
+                .map_err(|_| GeneralError::ParseError("VrfParameters.h".into()))?,
                 s: k256_scalar_from_bytes(
                     &value[PublicKey::SIZE_COMPRESSED + 32..PublicKey::SIZE_COMPRESSED + 32 + 32],
                 )
@@ -81,7 +85,12 @@ impl VrfParameters {
     /// Verifies that VRF values are valid.
     /// The SC performs the verification. This method is here just to test correctness.
     #[allow(non_snake_case)]
-    pub fn verify<const T: usize>(&self, creator: &Address, msg: &[u8; T], dst: &[u8]) -> Result<()> {
+    pub fn verify<const T: usize>(
+        &self,
+        creator: &Address,
+        msg: &[u8; T],
+        dst: &[u8],
+    ) -> Result<()> {
         let cap_B = self.get_encoded_payload(creator, msg, dst)?;
         let v_proj = ProjectivePoint::<Secp256k1>::from(self.V);
 
@@ -148,8 +157,11 @@ impl VrfParameters {
         msg: &[u8; T],
         dst: &[u8],
     ) -> Result<k256::ProjectivePoint> {
-        Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(&[creator.as_ref(), msg], &[dst])
-            .or(Err(CalculationError))
+        Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+            &[creator.as_ref(), msg],
+            &[dst],
+        )
+        .or(Err(CalculationError))
     }
 }
 
@@ -164,7 +176,10 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     dst: &[u8],
 ) -> crate::errors::Result<VrfParameters> {
     let chain_addr = chain_keypair.public().to_address();
-    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(&[chain_addr.as_ref(), msg.as_ref()], &[dst])?;
+    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+        &[chain_addr.as_ref(), msg.as_ref()],
+        &[dst],
+    )?;
 
     let a: Scalar = chain_keypair.into();
 
@@ -192,7 +207,11 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     )?;
     let s = r + h * a;
 
-    Ok(VrfParameters { V: V.to_affine(), h, s })
+    Ok(VrfParameters {
+        V: V.to_affine(),
+        h,
+        s,
+    })
 }
 
 /// Takes a private key, the corresponding Ethereum address and a payload
@@ -206,8 +225,11 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     dst: &[u8],
 ) -> Result<VrfParameters> {
     let chain_addr = chain_keypair.public().to_address();
-    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(&[chain_addr.as_ref(), msg.as_ref()], &[dst])?
-        .to_affine();
+    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+        &[chain_addr.as_ref(), msg.as_ref()],
+        &[dst],
+    )?
+    .to_affine();
 
     let a = secp256k1::Scalar::from_be_bytes(chain_keypair.secret().clone().into())
         .map_err(|_| crate::errors::CryptoError::InvalidSecretScalar)?;
@@ -324,7 +346,8 @@ mod tests {
     #[test]
     fn test_vrf_parameter_generation() -> anyhow::Result<()> {
         let dst = b"some DST tag";
-        let priv_key: [u8; 32] = hex!("f13233ff60e1f618525dac5f7d117bef0bad0eb0b0afb2459f9cbc57a3a987ba"); // dummy
+        let priv_key: [u8; 32] =
+            hex!("f13233ff60e1f618525dac5f7d117bef0bad0eb0b0afb2459f9cbc57a3a987ba"); // dummy
         let message = hex!("f13233ff60e1f618525dac5f7d117bef0bad0eb0b0afb2459f9cbc57a3a987ba"); // dummy
 
         let keypair = ChainKeypair::from_secret(&priv_key)?;
@@ -333,8 +356,10 @@ mod tests {
 
         let params = derive_vrf_parameters(message, &keypair, dst)?;
 
-        let cap_b =
-            Secp256k1::hash_from_bytes::<ExpandMsgXmd<Keccak256>>(&[pub_key.to_address().as_ref(), &message], &[dst])?;
+        let cap_b = Secp256k1::hash_from_bytes::<ExpandMsgXmd<Keccak256>>(
+            &[pub_key.to_address().as_ref(), &message],
+            &[dst],
+        )?;
 
         assert_eq!(
             params.get_s_b_witness(&keypair.public().to_address(), &message, dst)?,
@@ -342,7 +367,10 @@ mod tests {
         );
 
         let a: Scalar = ScalarPrimitive::<Secp256k1>::from_slice(&priv_key)?.into();
-        assert_eq!(params.get_h_v_witness(), (cap_b * a * params.h).to_encoded_point(false));
+        assert_eq!(
+            params.get_h_v_witness(),
+            (cap_b * a * params.h).to_encoded_point(false)
+        );
 
         let r_v: ProjectivePoint<Secp256k1> =
             cap_b * params.s - ProjectivePoint::<Secp256k1>::from(params.V) * params.h;

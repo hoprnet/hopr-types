@@ -207,7 +207,11 @@ impl<T, const N: usize> AsRef<[T]> for BoundedVec<T, N> {
 impl<T: Default + Copy, const N: usize> From<BoundedVec<T, N>> for [T; N] {
     fn from(value: BoundedVec<T, N>) -> Self {
         let mut out = [T::default(); N];
-        value.0.into_iter().enumerate().for_each(|(i, e)| out[i] = e);
+        value
+            .0
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, e)| out[i] = e);
         out
     }
 }
@@ -230,8 +234,13 @@ mod tests {
     #[test]
     fn bounded_vec_should_not_fit_more_than_allowed() {
         assert!(BoundedVec::<i32, 3>::try_from(vec![]).is_ok_and(|b| Vec::from(b).is_empty()));
-        assert!(BoundedVec::<i32, 3>::try_from(vec![1, 2]).is_ok_and(|b| Vec::from(b) == vec![1, 2]));
-        assert!(BoundedVec::<i32, 3>::try_from(vec![1, 2, 3]).is_ok_and(|b| Vec::from(b) == vec![1, 2, 3]));
+        assert!(
+            BoundedVec::<i32, 3>::try_from(vec![1, 2]).is_ok_and(|b| Vec::from(b) == vec![1, 2])
+        );
+        assert!(
+            BoundedVec::<i32, 3>::try_from(vec![1, 2, 3])
+                .is_ok_and(|b| Vec::from(b) == vec![1, 2, 3])
+        );
         assert!(BoundedVec::<i32, 3>::try_from(vec![1, 2, 3, 4]).is_err());
 
         assert_eq!(

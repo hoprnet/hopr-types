@@ -24,7 +24,9 @@ pub enum CoreTypesError {
     #[error("invalid winning probability value")]
     InvalidWinningProbability,
 
-    #[error("cannot acknowledge self-signed tickets. Ticket sender and recipient must be different")]
+    #[error(
+        "cannot acknowledge self-signed tickets. Ticket sender and recipient must be different"
+    )]
     LoopbackTicket,
 
     #[error("ticket is not winning")]

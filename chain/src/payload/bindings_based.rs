@@ -19,14 +19,17 @@ use hopr_bindings::{
     hopr_channels::{
         HoprChannels::{
             RedeemableTicket as OnChainRedeemableTicket, TicketData, closeIncomingChannelCall,
-            closeIncomingChannelSafeCall, finalizeOutgoingChannelClosureCall, finalizeOutgoingChannelClosureSafeCall,
-            fundChannelCall, fundChannelSafeCall, initiateOutgoingChannelClosureCall,
-            initiateOutgoingChannelClosureSafeCall, redeemTicketCall, redeemTicketSafeCall,
+            closeIncomingChannelSafeCall, finalizeOutgoingChannelClosureCall,
+            finalizeOutgoingChannelClosureSafeCall, fundChannelCall, fundChannelSafeCall,
+            initiateOutgoingChannelClosureCall, initiateOutgoingChannelClosureSafeCall,
+            redeemTicketCall, redeemTicketSafeCall,
         },
         HoprCrypto::{CompactSignature, VRFParameters},
     },
     hopr_node_management_module::HoprNodeManagementModule::execTransactionFromModuleCall,
-    hopr_node_safe_registry::HoprNodeSafeRegistry::{deregisterNodeBySafeCall, registerSafeByNodeCall},
+    hopr_node_safe_registry::HoprNodeSafeRegistry::{
+        deregisterNodeBySafeCall, registerSafeByNodeCall,
+    },
     hopr_token::HoprToken::{approveCall, sendCall, transferCall},
 };
 use hopr_crypto_types::prelude::*;
@@ -168,7 +171,11 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(tx)
     }
 
-    fn transfer<C: Currency>(&self, destination: Address, amount: Balance<C>) -> payload::Result<Self::TxRequest> {
+    fn transfer<C: Currency>(
+        &self,
+        destination: Address,
+        amount: Balance<C>,
+    ) -> payload::Result<Self::TxRequest> {
         let to = if XDai::is::<C>() {
             a2al(destination)
         } else if WxHOPR::is::<C>() {
@@ -237,14 +244,24 @@ impl PayloadGenerator for BasicPayloadGenerator {
         }
 
         let tx = TransactionRequest::default()
-            .with_input(closeIncomingChannelCall { source: a2al(source) }.abi_encode())
+            .with_input(
+                closeIncomingChannelCall {
+                    source: a2al(source),
+                }
+                .abi_encode(),
+            )
             .with_to(self.contract_addrs.channels);
         Ok(tx)
     }
 
-    fn initiate_outgoing_channel_closure(&self, destination: Address) -> payload::Result<Self::TxRequest> {
+    fn initiate_outgoing_channel_closure(
+        &self,
+        destination: Address,
+    ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
-            return Err(InvalidArguments("Cannot initiate closure of incoming channel to self"));
+            return Err(InvalidArguments(
+                "Cannot initiate closure of incoming channel to self",
+            ));
         }
 
         let tx = TransactionRequest::default()
@@ -258,9 +275,14 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(tx)
     }
 
-    fn finalize_outgoing_channel_closure(&self, destination: Address) -> payload::Result<Self::TxRequest> {
+    fn finalize_outgoing_channel_closure(
+        &self,
+        destination: Address,
+    ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
-            return Err(InvalidArguments("Cannot initiate closure of incoming channel to self"));
+            return Err(InvalidArguments(
+                "Cannot initiate closure of incoming channel to self",
+            ));
         }
 
         let tx = TransactionRequest::default()
@@ -296,7 +318,9 @@ impl PayloadGenerator for BasicPayloadGenerator {
     }
 
     fn deregister_node_by_safe(&self) -> payload::Result<Self::TxRequest> {
-        Err(InvalidState("Can only deregister an address if Safe is activated"))
+        Err(InvalidState(
+            "Can only deregister an address if Safe is activated",
+        ))
     }
 
     fn deploy_safe(
@@ -320,7 +344,9 @@ impl PayloadGenerator for BasicPayloadGenerator {
 
         let user_data = if include_node {
             UserData {
-                functionIdentifier: b256!("0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc"),
+                functionIdentifier: b256!(
+                    "0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc"
+                ),
                 nonce,
                 defaultTarget: default_target.into(),
                 admins,
@@ -329,7 +355,9 @@ impl PayloadGenerator for BasicPayloadGenerator {
                 .to_vec()
         } else {
             UserData {
-                functionIdentifier: b256!("dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45"),
+                functionIdentifier: b256!(
+                    "dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45"
+                ),
                 nonce,
                 defaultTarget: default_target.into(),
                 admins,
@@ -361,7 +389,11 @@ pub struct SafePayloadGenerator {
 }
 
 impl SafePayloadGenerator {
-    pub fn new(chain_keypair: &ChainKeypair, contract_addrs: ContractAddresses, module: Address) -> Self {
+    pub fn new(
+        chain_keypair: &ChainKeypair,
+        contract_addrs: ContractAddresses,
+        module: Address,
+    ) -> Self {
         Self {
             me: chain_keypair.into(),
             contract_addrs,
@@ -381,7 +413,11 @@ impl PayloadGenerator for SafePayloadGenerator {
         Ok(tx)
     }
 
-    fn transfer<C: Currency>(&self, destination: Address, amount: Balance<C>) -> payload::Result<Self::TxRequest> {
+    fn transfer<C: Currency>(
+        &self,
+        destination: Address,
+        amount: Balance<C>,
+    ) -> payload::Result<Self::TxRequest> {
         let to = if XDai::is::<C>() {
             a2al(destination)
         } else if WxHOPR::is::<C>() {
@@ -444,8 +480,12 @@ impl PayloadGenerator for SafePayloadGenerator {
             return Err(InvalidArguments("cannot fund channel to self"));
         }
 
-        if amount.amount() > hopr_primitive_types::prelude::U256::from(ChannelBuilder::MAX_FUNDING_AMOUNT) {
-            return Err(InvalidArguments("cannot fund channel with amount larger than MAX_FUNDING_AMOUNT"));
+        if amount.amount()
+            > hopr_primitive_types::prelude::U256::from(ChannelBuilder::MAX_FUNDING_AMOUNT)
+        {
+            return Err(InvalidArguments(
+                "cannot fund channel with amount larger than MAX_FUNDING_AMOUNT",
+            ));
         }
 
         let call_data = fundChannelSafeCall {
@@ -482,9 +522,14 @@ impl PayloadGenerator for SafePayloadGenerator {
         Ok(tx)
     }
 
-    fn initiate_outgoing_channel_closure(&self, destination: Address) -> payload::Result<Self::TxRequest> {
+    fn initiate_outgoing_channel_closure(
+        &self,
+        destination: Address,
+    ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
-            return Err(InvalidArguments("Cannot initiate closure of incoming channel to self"));
+            return Err(InvalidArguments(
+                "Cannot initiate closure of incoming channel to self",
+            ));
         }
 
         let call_data = initiateOutgoingChannelClosureSafeCall {
@@ -501,9 +546,14 @@ impl PayloadGenerator for SafePayloadGenerator {
         Ok(tx)
     }
 
-    fn finalize_outgoing_channel_closure(&self, destination: Address) -> payload::Result<Self::TxRequest> {
+    fn finalize_outgoing_channel_closure(
+        &self,
+        destination: Address,
+    ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
-            return Err(InvalidArguments("Cannot initiate closure of incoming channel to self"));
+            return Err(InvalidArguments(
+                "Cannot initiate closure of incoming channel to self",
+            ));
         }
 
         let call_data = finalizeOutgoingChannelClosureSafeCall {
@@ -616,16 +666,24 @@ fn convert_vrf_parameters(
 /// that the smart contract understands
 ///
 /// Not implemented using From trait because logic fits better here
-fn convert_acknowledged_ticket(off_chain: &RedeemableTicket) -> payload::Result<OnChainRedeemableTicket> {
+fn convert_acknowledged_ticket(
+    off_chain: &RedeemableTicket,
+) -> payload::Result<OnChainRedeemableTicket> {
     if let Some(ref signature) = off_chain.verified_ticket().signature {
         let serialized_signature = signature.as_ref();
 
         Ok(OnChainRedeemableTicket {
             data: TicketData {
                 channelId: B256::from_slice(off_chain.ticket.channel_id().as_ref()),
-                amount: U96::from_be_slice(&off_chain.verified_ticket().amount.amount().to_be_bytes()[32 - 12..]), /* Extract only the last 12 bytes (lowest 96 bits) */
-                ticketIndex: U48::from_be_slice(&off_chain.verified_ticket().index.to_be_bytes()[8 - 6..]),
-                epoch: U24::from_be_slice(&off_chain.verified_ticket().channel_epoch.to_be_bytes()[4 - 3..]),
+                amount: U96::from_be_slice(
+                    &off_chain.verified_ticket().amount.amount().to_be_bytes()[32 - 12..],
+                ), /* Extract only the last 12 bytes (lowest 96 bits) */
+                ticketIndex: U48::from_be_slice(
+                    &off_chain.verified_ticket().index.to_be_bytes()[8 - 6..],
+                ),
+                epoch: U24::from_be_slice(
+                    &off_chain.verified_ticket().channel_epoch.to_be_bytes()[4 - 3..],
+                ),
                 winProb: U56::from_be_slice(&off_chain.verified_ticket().encoded_win_prob),
             },
             signature: CompactSignature {
@@ -650,11 +708,14 @@ pub(crate) mod tests {
     use multiaddr::Multiaddr;
 
     use crate::payload::{
-        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction, tests::CONTRACT_ADDRS,
+        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
+        tests::CONTRACT_ADDRS,
     };
 
-    const PRIVATE_KEY_1: [u8; 32] = hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
-    const PRIVATE_KEY_2: [u8; 32] = hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
+    const PRIVATE_KEY_1: [u8; 32] =
+        hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
+    const PRIVATE_KEY_2: [u8; 32] =
+        hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
 
     lazy_static::lazy_static! {
         static ref REDEEMABLE_TICKET: RedeemableTicket = postcard::from_bytes(&hex!(
@@ -692,7 +753,10 @@ pub(crate) mod tests {
 
         let generator = BasicPayloadGenerator::new((&chain_key_0).into(), *CONTRACT_ADDRS);
 
-        let kb = KeyBinding::new((&chain_key_0).into(), &OffchainKeypair::from_secret(&PRIVATE_KEY_1)?);
+        let kb = KeyBinding::new(
+            (&chain_key_0).into(),
+            &OffchainKeypair::from_secret(&PRIVATE_KEY_1)?,
+        );
 
         let ad = AnnouncementData::new(kb, Some(test_multiaddr))?;
 
@@ -739,7 +803,8 @@ pub(crate) mod tests {
         let acked_ticket = *REDEEMABLE_TICKET;
 
         // Bob redeems the ticket
-        let generator = SafePayloadGenerator::new(&chain_key_bob, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
+        let generator =
+            SafePayloadGenerator::new(&chain_key_bob, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
         let redeem_ticket_tx = generator.redeem_ticket(acked_ticket)?;
         let signed_tx = redeem_ticket_tx
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
@@ -758,14 +823,22 @@ pub(crate) mod tests {
         let generator = BasicPayloadGenerator::new((&chain_key_alice).into(), *CONTRACT_ADDRS);
         let tx = generator.transfer((&chain_key_bob).into(), HoprBalance::from(100))?;
 
-        let signed_tx = tx.sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob).await?;
+        let signed_tx = tx
+            .sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob)
+            .await?;
 
         insta::assert_snapshot!("withdraw_basic", hex::encode(signed_tx));
 
-        let generator = SafePayloadGenerator::new(&chain_key_alice, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
+        let generator = SafePayloadGenerator::new(
+            &chain_key_alice,
+            *CONTRACT_ADDRS,
+            [1u8; Address::SIZE].into(),
+        );
         let tx = generator.transfer((&chain_key_bob).into(), HoprBalance::from(100))?;
 
-        let signed_tx = tx.sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob).await?;
+        let signed_tx = tx
+            .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
+            .await?;
 
         insta::assert_snapshot!("withdraw_safe", hex::encode(signed_tx));
 

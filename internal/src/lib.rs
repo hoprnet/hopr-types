@@ -93,8 +93,8 @@ pub use multiaddr::Multiaddr;
 #[doc(hidden)]
 pub mod prelude {
     pub use super::{
-        Multiaddr, NodeId, account::*, announcement::*, channels::*, errors::CoreTypesError, path::*, protocol::*,
-        routing::*, tickets::*,
+        Multiaddr, NodeId, account::*, announcement::*, channels::*, errors::CoreTypesError,
+        path::*, protocol::*, routing::*, tickets::*,
     };
 }
 

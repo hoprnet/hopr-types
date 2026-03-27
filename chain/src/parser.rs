@@ -7,8 +7,8 @@ use hopr_bindings::{
     hopr_channels::HoprChannels::{
         closeIncomingChannelCall, closeIncomingChannelSafeCall, finalizeOutgoingChannelClosureCall,
         finalizeOutgoingChannelClosureSafeCall, fundChannelCall, fundChannelSafeCall,
-        initiateOutgoingChannelClosureCall, initiateOutgoingChannelClosureSafeCall, redeemTicketCall,
-        redeemTicketSafeCall,
+        initiateOutgoingChannelClosureCall, initiateOutgoingChannelClosureSafeCall,
+        redeemTicketCall, redeemTicketSafeCall,
     },
     hopr_node_management_module::HoprNodeManagementModule::execTransactionFromModuleCall,
     hopr_node_safe_registry::HoprNodeSafeRegistry::registerSafeByNodeCall,
@@ -77,22 +77,28 @@ impl ParsedHoprChainAction {
                 .0,
         );
 
-        let tx_target = tx
-            .to()
-            .map(|to| Address::from(to.0.0))
-            .ok_or(ChainTypesError::ParseError(anyhow::anyhow!(
-                "transaction has no recipient"
-            )))?;
+        let tx_target =
+            tx.to()
+                .map(|to| Address::from(to.0.0))
+                .ok_or(ChainTypesError::ParseError(anyhow::anyhow!(
+                    "transaction has no recipient"
+                )))?;
 
         let (target_contract, input, module_call) = if &tx_target == module {
             let module_call = execTransactionFromModuleCall::abi_decode(tx.input().as_ref())
                 .map_err(|e| ChainTypesError::ParseError(e.into()))?;
             (module_call.to.0.0.into(), module_call.data, true)
-        } else if contract_addresses.into_iter().any(|addr| addr == a2al(tx_target)) {
+        } else if contract_addresses
+            .into_iter()
+            .any(|addr| addr == a2al(tx_target))
+        {
             (tx_target, tx.input().clone(), false)
         } else if tx.value() > 0 {
             return Ok((
-                Self::WithdrawNative(tx_target, XDaiBalance::from_be_bytes(tx.value().to_be_bytes::<32>())),
+                Self::WithdrawNative(
+                    tx_target,
+                    XDaiBalance::from_be_bytes(tx.value().to_be_bytes::<32>()),
+                ),
                 signer,
             ));
         } else {
@@ -107,7 +113,10 @@ impl ParsedHoprChainAction {
             let register_call = registerSafeByNodeCall::abi_decode(input.as_ref())
                 .map_err(|e| ChainTypesError::ParseError(e.into()))?;
 
-            Ok((Self::RegisterSafeAddress(register_call.safeAddr.0.0.into()), signer))
+            Ok((
+                Self::RegisterSafeAddress(register_call.safeAddr.0.0.into()),
+                signer,
+            ))
         } else if target_contract == contract_addresses.channels && module_call {
             if let Ok(fund) = fundChannelSafeCall::abi_decode(input.as_ref()) {
                 return Ok((
@@ -119,23 +128,34 @@ impl ParsedHoprChainAction {
                 ));
             }
 
-            if let Ok(initiate) = initiateOutgoingChannelClosureSafeCall::abi_decode(input.as_ref()) {
+            if let Ok(initiate) = initiateOutgoingChannelClosureSafeCall::abi_decode(input.as_ref())
+            {
                 return Ok((
-                    Self::InitializeChannelClosure(generate_channel_id(&signer, &initiate.destination.0.0.into())),
+                    Self::InitializeChannelClosure(generate_channel_id(
+                        &signer,
+                        &initiate.destination.0.0.into(),
+                    )),
                     signer,
                 ));
             }
 
-            if let Ok(finalize) = finalizeOutgoingChannelClosureSafeCall::abi_decode(input.as_ref()) {
+            if let Ok(finalize) = finalizeOutgoingChannelClosureSafeCall::abi_decode(input.as_ref())
+            {
                 return Ok((
-                    Self::FinalizeChannelClosure(generate_channel_id(&signer, &finalize.destination.0.0.into())),
+                    Self::FinalizeChannelClosure(generate_channel_id(
+                        &signer,
+                        &finalize.destination.0.0.into(),
+                    )),
                     signer,
                 ));
             }
 
             if let Ok(close_incoming) = closeIncomingChannelSafeCall::abi_decode(input.as_ref()) {
                 return Ok((
-                    Self::IncomingChannelClosure(generate_channel_id(&close_incoming.source.0.0.into(), &signer)),
+                    Self::IncomingChannelClosure(generate_channel_id(
+                        &close_incoming.source.0.0.into(),
+                        &signer,
+                    )),
                     signer,
                 ));
             }
@@ -145,8 +165,13 @@ impl ParsedHoprChainAction {
                 return Ok((
                     Self::RedeemTicket {
                         channel_id: ticket_data.channelId.0.into(),
-                        ticket_index: U256::from_be_bytes(ticket_data.ticketIndex.to_be_bytes::<6>()).as_u64(),
-                        ticket_amount: HoprBalance::from_be_bytes(ticket_data.amount.to_be_bytes::<12>()),
+                        ticket_index: U256::from_be_bytes(
+                            ticket_data.ticketIndex.to_be_bytes::<6>(),
+                        )
+                        .as_u64(),
+                        ticket_amount: HoprBalance::from_be_bytes(
+                            ticket_data.amount.to_be_bytes::<12>(),
+                        ),
                     },
                     signer,
                 ));
@@ -168,21 +193,30 @@ impl ParsedHoprChainAction {
 
             if let Ok(initiate) = initiateOutgoingChannelClosureCall::abi_decode(input.as_ref()) {
                 return Ok((
-                    Self::InitializeChannelClosure(generate_channel_id(&signer, &initiate.destination.0.0.into())),
+                    Self::InitializeChannelClosure(generate_channel_id(
+                        &signer,
+                        &initiate.destination.0.0.into(),
+                    )),
                     signer,
                 ));
             }
 
             if let Ok(finalize) = finalizeOutgoingChannelClosureCall::abi_decode(input.as_ref()) {
                 return Ok((
-                    Self::FinalizeChannelClosure(generate_channel_id(&signer, &finalize.destination.0.0.into())),
+                    Self::FinalizeChannelClosure(generate_channel_id(
+                        &signer,
+                        &finalize.destination.0.0.into(),
+                    )),
                     signer,
                 ));
             }
 
             if let Ok(close_incoming) = closeIncomingChannelCall::abi_decode(input.as_ref()) {
                 return Ok((
-                    Self::IncomingChannelClosure(generate_channel_id(&close_incoming.source.0.0.into(), &signer)),
+                    Self::IncomingChannelClosure(generate_channel_id(
+                        &close_incoming.source.0.0.into(),
+                        &signer,
+                    )),
                     signer,
                 ));
             }
@@ -192,8 +226,13 @@ impl ParsedHoprChainAction {
                 return Ok((
                     Self::RedeemTicket {
                         channel_id: ticket_data.channelId.0.into(),
-                        ticket_index: U256::from_be_bytes(ticket_data.ticketIndex.to_be_bytes::<6>()).as_u64(),
-                        ticket_amount: HoprBalance::from_be_bytes(ticket_data.amount.to_be_bytes::<12>()),
+                        ticket_index: U256::from_be_bytes(
+                            ticket_data.ticketIndex.to_be_bytes::<6>(),
+                        )
+                        .as_u64(),
+                        ticket_amount: HoprBalance::from_be_bytes(
+                            ticket_data.amount.to_be_bytes::<12>(),
+                        ),
                     },
                     signer,
                 ));
@@ -214,13 +253,17 @@ impl ParsedHoprChainAction {
                     return Ok((
                         Self::Announce {
                             packet_key: kb.ed25519_pub_key.0.try_into().map_err(|_| {
-                                ChainTypesError::ParseError(anyhow::anyhow!("failed to parse packet key"))
+                                ChainTypesError::ParseError(anyhow::anyhow!(
+                                    "failed to parse packet key"
+                                ))
                             })?,
                             multiaddress: if kb.multiaddress.is_empty() {
                                 None
                             } else {
                                 Some(kb.multiaddress.parse().map_err(|_| {
-                                    ChainTypesError::ParseError(anyhow::anyhow!("failed to parse multiaddress"))
+                                    ChainTypesError::ParseError(anyhow::anyhow!(
+                                        "failed to parse multiaddress"
+                                    ))
                                 })?)
                             },
                         },
@@ -233,8 +276,8 @@ impl ParsedHoprChainAction {
                 }
             }
 
-            let transfer =
-                transferCall::abi_decode(input.as_ref()).map_err(|e| ChainTypesError::ParseError(e.into()))?;
+            let transfer = transferCall::abi_decode(input.as_ref())
+                .map_err(|e| ChainTypesError::ParseError(e.into()))?;
 
             Ok((
                 Self::WithdrawToken(
@@ -262,11 +305,14 @@ mod tests {
 
     use super::*;
     use crate::payload::{
-        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction, tests::CONTRACT_ADDRS,
+        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
+        tests::CONTRACT_ADDRS,
     };
 
-    const PRIVATE_KEY_1: [u8; 32] = hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
-    const PRIVATE_KEY_2: [u8; 32] = hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
+    const PRIVATE_KEY_1: [u8; 32] =
+        hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
+    const PRIVATE_KEY_2: [u8; 32] =
+        hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
 
     #[tokio::test]
     async fn announce_safe_action_should_decode() -> anyhow::Result<()> {
@@ -284,8 +330,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::Announce {
@@ -308,8 +357,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::FundChannel([2u8; Address::SIZE].into(), 123_u32.into())
@@ -322,8 +374,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::FundChannel([2u8; Address::SIZE].into(), 123_u32.into())
@@ -343,11 +398,18 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let channel_id = generate_channel_id(&cp.public().to_address(), &[2u8; Address::SIZE].into());
+        let channel_id =
+            generate_channel_id(&cp.public().to_address(), &[2u8; Address::SIZE].into());
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::InitializeChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::InitializeChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         let safe_gen = SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
@@ -356,9 +418,15 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::InitializeChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::InitializeChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         Ok(())
@@ -374,11 +442,18 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let channel_id = generate_channel_id(&cp.public().to_address(), &[2u8; Address::SIZE].into());
+        let channel_id =
+            generate_channel_id(&cp.public().to_address(), &[2u8; Address::SIZE].into());
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::FinalizeChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::FinalizeChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         let safe_gen = SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
@@ -387,9 +462,15 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::FinalizeChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::FinalizeChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         Ok(())
@@ -405,11 +486,18 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let channel_id = generate_channel_id(&[2u8; Address::SIZE].into(), &cp.public().to_address());
+        let channel_id =
+            generate_channel_id(&[2u8; Address::SIZE].into(), &cp.public().to_address());
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::IncomingChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::IncomingChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         let safe_gen = SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
@@ -418,9 +506,15 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
-        assert_eq!(action, ParsedHoprChainAction::IncomingChannelClosure(channel_id));
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::IncomingChannelClosure(channel_id)
+        );
         assert_eq!(signer, cp.public().to_address());
 
         Ok(())
@@ -436,8 +530,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::RegisterSafeAddress([2u8; Address::SIZE].into())
@@ -450,8 +547,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::RegisterSafeAddress([2u8; Address::SIZE].into())
@@ -484,30 +584,43 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp_2)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::RedeemTicket {
-                channel_id: generate_channel_id(&cp_1.public().to_address(), &cp_2.public().to_address()),
+                channel_id: generate_channel_id(
+                    &cp_1.public().to_address(),
+                    &cp_2.public().to_address()
+                ),
                 ticket_index: 7,
                 ticket_amount: 123_u32.into()
             }
         );
         assert_eq!(signer, cp_2.public().to_address());
 
-        let safe_gen = SafePayloadGenerator::new(&cp_2, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
+        let safe_gen =
+            SafePayloadGenerator::new(&cp_2, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
         let signed_tx = safe_gen
             .redeem_ticket(ticket)?
             .sign_and_encode_to_eip2718(1, 1, None, &cp_2)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::RedeemTicket {
-                channel_id: generate_channel_id(&cp_1.public().to_address(), &cp_2.public().to_address()),
+                channel_id: generate_channel_id(
+                    &cp_1.public().to_address(),
+                    &cp_2.public().to_address()
+                ),
                 ticket_index: 7,
                 ticket_amount: 123_u32.into()
             }
@@ -527,8 +640,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::WithdrawNative([2u8; Address::SIZE].into(), 123_u32.into())
@@ -541,8 +657,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::WithdrawNative([2u8; Address::SIZE].into(), 123_u32.into())
@@ -562,8 +681,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::WithdrawToken([2u8; Address::SIZE].into(), 123_u32.into())
@@ -576,8 +698,11 @@ mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &cp)
             .await?;
 
-        let (action, signer) =
-            ParsedHoprChainAction::parse_from_eip2718(&signed_tx, &[1u8; Address::SIZE].into(), &CONTRACT_ADDRS)?;
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
         assert_eq!(
             action,
             ParsedHoprChainAction::WithdrawToken([2u8; Address::SIZE].into(), 123_u32.into())

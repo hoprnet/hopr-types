@@ -73,10 +73,18 @@ pub trait PayloadGenerator {
     fn approve(&self, spender: Address, amount: HoprBalance) -> Result<Self::TxRequest>;
 
     /// Create a ERC20 transfer transaction payload
-    fn transfer<C: Currency>(&self, destination: Address, amount: Balance<C>) -> Result<Self::TxRequest>;
+    fn transfer<C: Currency>(
+        &self,
+        destination: Address,
+        amount: Balance<C>,
+    ) -> Result<Self::TxRequest>;
 
     /// Creates the transaction payload to announce a node on-chain.
-    fn announce(&self, announcement: AnnouncementData, key_binding_fee: HoprBalance) -> Result<Self::TxRequest>;
+    fn announce(
+        &self,
+        announcement: AnnouncementData,
+        key_binding_fee: HoprBalance,
+    ) -> Result<Self::TxRequest>;
 
     /// Creates the transaction payload to open a payment channel
     fn fund_channel(&self, dest: Address, amount: HoprBalance) -> Result<Self::TxRequest>;
