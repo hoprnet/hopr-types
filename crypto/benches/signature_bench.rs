@@ -8,7 +8,9 @@ use hopr_crypto_types::{
 //
 // https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance
 #[cfg(all(feature = "allocator-mimalloc", feature = "allocator-jemalloc"))]
-compile_error!("feature \"allocator-jemalloc\" and feature \"allocator-mimalloc\" cannot be enabled at the same time");
+compile_error!(
+    "feature \"allocator-jemalloc\" and feature \"allocator-mimalloc\" cannot be enabled at the same time"
+);
 #[cfg(all(target_os = "linux", feature = "allocator-mimalloc"))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -78,7 +80,9 @@ pub fn offchain_signature_bench(c: &mut Criterion) {
             .map(|i| format!("test_msg_{i}").as_bytes().to_vec())
             .collect::<Vec<_>>();
 
-        let kps = (0..BATCH_SIZE).map(|_| OffchainKeypair::random()).collect::<Vec<_>>();
+        let kps = (0..BATCH_SIZE)
+            .map(|_| OffchainKeypair::random())
+            .collect::<Vec<_>>();
 
         let tuples = (0..BATCH_SIZE)
             .map(|i| {

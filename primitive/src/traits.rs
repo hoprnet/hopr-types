@@ -68,7 +68,9 @@ pub trait BytesEncodable<const N: usize, E = GeneralError>:
 /// and therefore requires no memory allocation to represent the type in binary encoding.
 ///
 /// This is a strict subset of [BytesEncodable], see its documentation for details.
-pub trait BytesRepresentable<E = GeneralError>: AsRef<[u8]> + for<'a> TryFrom<&'a [u8], Error = E> {
+pub trait BytesRepresentable<E = GeneralError>:
+    AsRef<[u8]> + for<'a> TryFrom<&'a [u8], Error = E>
+{
     /// Size of the encoded byte array.
     const SIZE: usize;
 
@@ -86,7 +88,8 @@ impl<T: BytesRepresentable> ToHex for T {
 
     fn from_hex(str: &str) -> Result<Self> {
         if !str.is_empty() && str.len().is_multiple_of(2) {
-            let data = str.strip_prefix("0x")
+            let data = str
+                .strip_prefix("0x")
                 .or_else(|| str.strip_prefix("0X"))
                 .unwrap_or(str);
 
@@ -143,6 +146,7 @@ pub trait SaturatingSub {
 
 impl SaturatingSub for std::time::SystemTime {
     fn saturating_sub(&self, earlier: std::time::SystemTime) -> std::time::Duration {
-        self.duration_since(earlier).unwrap_or(std::time::Duration::ZERO)
+        self.duration_since(earlier)
+            .unwrap_or(std::time::Duration::ZERO)
     }
 }

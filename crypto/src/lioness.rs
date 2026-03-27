@@ -7,8 +7,8 @@ use std::{fmt::Formatter, marker::PhantomData, ops::Sub};
 
 #[allow(deprecated)] // Until the crate updates to newer versions of `generic-array`
 use cipher::{
-    AlgorithmName, ArrayLength, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit, KeySizeUser,
-    StreamCipher, generic_array::GenericArray, inout::InOut,
+    AlgorithmName, ArrayLength, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit,
+    KeySizeUser, StreamCipher, generic_array::GenericArray, inout::InOut,
 };
 use digest::{Digest, OutputSizeUser};
 use typenum::{B1, Diff, IsEqual, IsGreater, Unsigned};
@@ -49,7 +49,8 @@ where
     _phantom: PhantomData<(H, S, B)>,
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeySizeUser for Lioness<H, S, B>
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeySizeUser
+    for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
@@ -62,7 +63,8 @@ where
     type KeySize = typenum::Prod<H::OutputSize, cipher::consts::U4>;
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> IvSizeUser for Lioness<H, S, B>
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> IvSizeUser
+    for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
@@ -89,7 +91,8 @@ where
     type BlockSize = B;
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeyIvInit for Lioness<H, S, B>
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeyIvInit
+    for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
@@ -114,8 +117,11 @@ where
     }
 }
 
-impl<H: KeySizeUser + OutputSizeUser + AlgorithmName, S: AlgorithmName + KeySizeUser + IvSizeUser, B: ArrayLength<u8>>
-    AlgorithmName for Lioness<H, S, B>
+impl<
+    H: KeySizeUser + OutputSizeUser + AlgorithmName,
+    S: AlgorithmName + KeySizeUser + IvSizeUser,
+    B: ArrayLength<u8>,
+> AlgorithmName for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<<S as KeySizeUser>::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
@@ -148,8 +154,9 @@ where
     /// Performs encryption of the given `block`.
     pub fn encrypt_block(&self, mut block: InOut<'_, '_, Block<Self>>) {
         // L' = L ^ K1
-        let mut left_prime =
-            GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_in()[0..Self::K]);
+        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+            &block.get_in()[0..Self::K],
+        );
         for i in 0..Self::K {
             left_prime[i] ^= self.k1[i];
         }
@@ -173,8 +180,9 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime =
-            GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_out()[0..Self::K]);
+        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+            &block.get_out()[0..Self::K],
+        );
         for i in 0..Self::K {
             left_prime[i] ^= self.k3[i];
         }
@@ -205,8 +213,9 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime =
-            GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_out()[0..Self::K]);
+        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+            &block.get_out()[0..Self::K],
+        );
         for i in 0..Self::K {
             left_prime[i] ^= self.k3[i];
         }
@@ -230,8 +239,9 @@ where
         }
 
         // L' = L ^ K1
-        let mut left_prime =
-            GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_out()[0..Self::K]);
+        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+            &block.get_out()[0..Self::K],
+        );
         for i in 0..Self::K {
             left_prime[i] ^= self.k1[i];
         }
@@ -283,7 +293,10 @@ mod tests {
         let iv_sz = LionessBlake3ChaCha20::<U33>::iv_size();
         let block_sz = LionessBlake3ChaCha20::<U33>::block_size();
 
-        assert_eq!(key_sz, <blake3::Hasher as OutputSizeUser>::output_size() * 4);
+        assert_eq!(
+            key_sz,
+            <blake3::Hasher as OutputSizeUser>::output_size() * 4
+        );
         assert_eq!(iv_sz, chacha20::ChaCha20::iv_size() * 2);
         assert_eq!(block_sz, U33::USIZE);
     }

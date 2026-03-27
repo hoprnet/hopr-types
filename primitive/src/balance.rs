@@ -16,7 +16,9 @@ use crate::{
 };
 
 /// Represents a general currency - like a token or a coin.
-pub trait Currency: Display + FromStr<Err = GeneralError> + Default + PartialEq + Eq + PartialOrd + Ord {
+pub trait Currency:
+    Display + FromStr<Err = GeneralError> + Default + PartialEq + Eq + PartialOrd + Ord
+{
     /// Name of the currency.
     const NAME: &'static str;
 
@@ -164,10 +166,15 @@ impl<C: Currency> FromStr for Balance<C> {
             .expect("conversion to big unsigned integer never fails");
 
         if biguint_val > BigUint::from_bytes_be(&U256::max_value().to_be_bytes()) {
-            return Err(GeneralError::ParseError("balance value out of bounds".into()));
+            return Err(GeneralError::ParseError(
+                "balance value out of bounds".into(),
+            ));
         }
 
-        Ok(Self(U256::from_be_bytes(biguint_val.to_bytes_be()), currency))
+        Ok(Self(
+            U256::from_be_bytes(biguint_val.to_bytes_be()),
+            currency,
+        ))
     }
 }
 
@@ -421,8 +428,9 @@ mod tests {
         let too_big = primitive_types::U512::from(U256::max_value()) + 1;
         assert!(HoprBalance::from_str(&format!("{too_big} wei wxHOPR")).is_err());
 
-        let too_big =
-            (primitive_types::U512::from(U256::max_value()) + 1).div(primitive_types::U512::exp10(WxHOPR::SCALE)) + 1;
+        let too_big = (primitive_types::U512::from(U256::max_value()) + 1)
+            .div(primitive_types::U512::exp10(WxHOPR::SCALE))
+            + 1;
         assert!(HoprBalance::from_str(&format!("{too_big} wxHOPR")).is_err());
     }
 
@@ -448,7 +456,10 @@ mod tests {
     #[test]
     fn balance_should_translate_from_non_wei_units() {
         let balance = HoprBalance::new_base(10);
-        assert_eq!(balance.amount(), U256::from(10) * U256::exp10(WxHOPR::SCALE));
+        assert_eq!(
+            balance.amount(),
+            U256::from(10) * U256::exp10(WxHOPR::SCALE)
+        );
         assert_eq!(balance.amount_in_base_units(), "10");
     }
 
@@ -461,22 +472,40 @@ mod tests {
         assert_eq!(balance, Balance::new_base(5));
 
         let balance = HoprBalance::from_str(".5 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         let balance = HoprBalance::from_str(" .5 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         let balance = HoprBalance::from_str("0.5 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         let balance = HoprBalance::from_str("0. 5 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         let balance = HoprBalance::from_str("0. 50 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         let balance = HoprBalance::from_str("0. 5 0 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(5) * U256::exp10(WxHOPR::SCALE - 1));
+        assert_eq!(
+            balance.amount(),
+            U256::from(5) * U256::exp10(WxHOPR::SCALE - 1)
+        );
 
         Ok(())
     }
@@ -510,7 +539,10 @@ mod tests {
     #[test]
     fn balance_should_parse_from_formatted_string() -> anyhow::Result<()> {
         let balance = HoprBalance::from_str("5.0123 wxHOPR")?;
-        assert_eq!(balance.amount(), U256::from(50123) * U256::exp10(WxHOPR::SCALE - 4));
+        assert_eq!(
+            balance.amount(),
+            U256::from(50123) * U256::exp10(WxHOPR::SCALE - 4)
+        );
 
         let balance = HoprBalance::from_str("5.001 weiwxHOPR")?;
         assert_eq!(balance.amount(), 5.into());
@@ -569,9 +601,13 @@ mod tests {
 
     #[test]
     fn balance_should_sum_in_interator_correctly() {
-        let sum = vec![HoprBalance::from(1), HoprBalance::from(2), HoprBalance::from(3)]
-            .into_iter()
-            .sum::<HoprBalance>();
+        let sum = vec![
+            HoprBalance::from(1),
+            HoprBalance::from(2),
+            HoprBalance::from(3),
+        ]
+        .into_iter()
+        .sum::<HoprBalance>();
 
         assert_eq!(sum, HoprBalance::from(6));
     }

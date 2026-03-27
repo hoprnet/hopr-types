@@ -44,7 +44,9 @@ pub(crate) fn random_group_element() -> ([u8; 32], NonIdentity<AffinePoint>) {
 /// Creates X25519 secret scalar (also compatible with Ed25519 scalar) from the given bytes.
 /// This function ensures the value is pre-multiplied by the curve's co-factor and already
 /// reduced mod 2^255-19.
-pub fn x25519_scalar_from_bytes(bytes: &[u8]) -> crate::errors::Result<curve25519_dalek::scalar::Scalar> {
+pub fn x25519_scalar_from_bytes(
+    bytes: &[u8],
+) -> crate::errors::Result<curve25519_dalek::scalar::Scalar> {
     if bytes.len() == 32 {
         // Representation of the scalar is little-endian
         let mut clamped = [0u8; 32];
@@ -53,7 +55,9 @@ pub fn x25519_scalar_from_bytes(bytes: &[u8]) -> crate::errors::Result<curve2551
         clamped[31] &= 0b0111_1111; // clear the 256-th bit
         clamped[31] |= 0b0100_0000; // make it a 255-bit number
 
-        Ok(curve25519_dalek::scalar::Scalar::from_bytes_mod_order(clamped))
+        Ok(curve25519_dalek::scalar::Scalar::from_bytes_mod_order(
+            clamped,
+        ))
     } else {
         Err(InvalidInputValue("bytes"))
     }
@@ -64,7 +68,10 @@ pub fn x25519_scalar_from_bytes(bytes: &[u8]) -> crate::errors::Result<curve2551
 #[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
 pub fn k256_scalar_from_bytes(bytes: &[u8]) -> crate::errors::Result<k256::Scalar> {
     if bytes.len() == k256::elliptic_curve::FieldBytesSize::<Secp256k1>::to_usize() {
-        Option::from(k256::Scalar::from_repr(*k256::FieldBytes::from_slice(bytes))).ok_or(InvalidInputValue("bytes"))
+        Option::from(k256::Scalar::from_repr(*k256::FieldBytes::from_slice(
+            bytes,
+        )))
+        .ok_or(InvalidInputValue("bytes"))
     } else {
         Err(InvalidInputValue("bytes"))
     }

@@ -1,15 +1,13 @@
-# contracts.nix - HOPR contracts Rust package definitions
+# api.nix - HOPR api Rust package definitions
 #
 # Builds the hopr-types crate for multiple platforms using nix-lib builders.
 # Source filtering, rev, and build arguments are all defined here.
-# The contracts-specific preConfigure generates foundry.toml from foundry.in.toml
-# (only for the main build; the deps-only build does not need it).
 
 {
   builders,
   nixLib,
   self,
-  lib
+  lib,
 }:
 let
   fs = lib.fileset;
@@ -23,13 +21,6 @@ let
 
   src = nixLib.mkSrc {
     inherit root fs;
-    # Extra files not covered by the default .rs/.toml extensions
-    # extraFiles = [
-    #   (root + "/ethereum/bindings/contracts-addresses.json")
-    #   (root + "/ethereum/contracts/remappings.txt")
-    #   (fs.fileFilter (file: file.hasExt "sol") (root + "/vendor/solidity"))
-    #   (fs.fileFilter (file: file.hasExt "sol") (root + "/ethereum/contracts/src"))
-    # ];
   };
 
   cargoToml = ../../Cargo.toml;
@@ -59,7 +50,6 @@ let
 in
 {
 
-
   clippy = buildLib builders.local { runClippy = true; };
 
   test = buildLib builders.local { runTests = true; };
@@ -67,7 +57,7 @@ in
   docs = buildLib builders.localNightly { buildDocs = true; };
 
   # Cross-compiled rlib packages
-  # Artifacts are available at: ./result/lib/libhopr_bindings.rlib
+  # Artifacts are available at: ./result/lib/libhopr_types.rlib
   lib-hopr-types-x86_64-linux = buildLib builders."x86_64-linux" { };
   lib-hopr-types-aarch64-linux = buildLib builders."aarch64-linux" { };
   lib-hopr-types-x86_64-darwin = buildLib builders."x86_64-darwin" { };

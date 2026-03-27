@@ -1,14 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = [
-    "chain",
-    "crypto",
-    "internal",
-    "lib",
-    "primitive",
-    "random"
-]
+members = ["chain", "crypto", "internal", "lib", "primitive", "random"]
 default-members = ["lib"]
 
 [workspace.metadata.crane]
@@ -52,19 +45,19 @@ hickory-resolver = "0.25.2"
 indexmap = { version = "2.13.0", features = ["serde", "rayon"] }
 insta = { version = "1.46.3", features = ["json", "yaml", "redactions"] }
 k256 = { version = "0.13.4", features = [
-    "arithmetic",
-    "ecdh",
-    "hash2curve",
-    "serde",
+  "arithmetic",
+  "ecdh",
+  "hash2curve",
+  "serde",
 ] }
 lazy_static = "1.5.0"
 libp2p-identity = { version = "0.2.13", features = [
-    "peerid",
-    "ed25519",
-    "rand",
+  "peerid",
+  "ed25519",
+  "rand",
 ] }
 mimalloc = { version = "0.1.48", default-features = false, features = [
-    "secure",
+  "secure",
 ] }
 mockall = "0.14.0"
 multiaddr = "0.18.2"
@@ -98,9 +91,9 @@ thiserror = "2.0.18"
 tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
 tikv-jemallocator = "0.6.1"
 tokio = { version = "1.50.0", features = [
-    "rt-multi-thread",
-    "macros",
-    "tracing",
+  "rt-multi-thread",
+  "macros",
+  "tracing",
 ] }
 tracing = { version = "0.1.44", features = ["release_max_level_debug"] }
 typenum = "1.19.0"
@@ -111,5 +104,5 @@ hopr-chain-types = { path = "chain" }
 hopr-crypto-random = { path = "random" }
 hopr-crypto-types = { path = "crypto" }
 hopr-internal-types = { path = "internal" }
-hopr-primitive-types = { path = "primitive"}
+hopr-primitive-types = { path = "primitive" }
 hopr-types = { path = "lib" }

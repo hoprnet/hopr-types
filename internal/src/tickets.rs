@@ -9,12 +9,12 @@ use hopr_crypto_types::prelude::*;
 use hopr_primitive_types::prelude::*;
 use tracing::{error, instrument};
 
+use crate::prelude::ChannelBuilder;
 use crate::{
     errors,
     errors::CoreTypesError,
     prelude::{ChannelId, CoreTypesError::InvalidInputData, generate_channel_id},
 };
-use crate::prelude::ChannelBuilder;
 
 /// Custom float to integer encoding used in the integer-only
 /// Ethereum Virtual Machine (EVM). Chosen to be easily
@@ -38,7 +38,9 @@ pub type EncodedWinProb = [u8; ENCODED_WIN_PROB_LENGTH];
 /// [lexicographically compared](WinningProbability::lex_cmp).
 #[derive(Clone, Copy, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct WinningProbability(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] EncodedWinProb);
+pub struct WinningProbability(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] EncodedWinProb,
+);
 
 impl WinningProbability {
     /// 100% winning probability
@@ -86,7 +88,9 @@ impl WinningProbability {
     pub fn try_from_f64(win_prob: f64) -> errors::Result<Self> {
         // Also makes sure the input value is not NaN or infinite.
         if !(0.0..=1.0).contains(&win_prob) {
-            return Err(InvalidInputData("winning probability must be in [0.0, 1.0]".into()));
+            return Err(InvalidInputData(
+                "winning probability must be in [0.0, 1.0]".into(),
+            ));
         }
 
         if f64_approx_eq(0.0, win_prob, Self::EPSILON) {
@@ -116,7 +120,8 @@ impl WinningProbability {
         let a = self.as_f64();
         let b = other.as_f64();
         if !f64_approx_eq(a, b, Self::EPSILON) {
-            a.partial_cmp(&b).expect("finite non-NaN f64 comparison cannot fail")
+            a.partial_cmp(&b)
+                .expect("finite non-NaN f64 comparison cannot fail")
         } else {
             Ordering::Equal
         }
@@ -173,7 +178,9 @@ impl FromStr for WinningProbability {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         f64::from_str(s)
-            .map_err(|e| CoreTypesError::ParseError(format!("failed to parse winning probability: {e}")))
+            .map_err(|e| {
+                CoreTypesError::ParseError(format!("failed to parse winning probability: {e}"))
+            })
             .and_then(|v| v.try_into())
     }
 }
@@ -292,7 +299,11 @@ pub struct TicketId {
 
 impl Display for TicketId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ticket #{}, epoch {} in channel {}", self.index, self.epoch, self.id)
+        write!(
+            f,
+            "ticket #{}, epoch {} in channel {}",
+            self.index, self.epoch, self.id
+        )
     }
 }
 
@@ -436,8 +447,12 @@ impl TicketBuilder {
     /// was set.
     pub fn build(self) -> errors::Result<Ticket> {
         let amount = match (self.amount, self.balance) {
-            (Some(amount), None) if amount.lt(&Self::MAX_TICKET_AMOUNT.into()) => HoprBalance::from(amount),
-            (None, Some(balance)) if balance.amount().lt(&Self::MAX_TICKET_AMOUNT.into()) => balance,
+            (Some(amount), None) if amount.lt(&Self::MAX_TICKET_AMOUNT.into()) => {
+                HoprBalance::from(amount)
+            }
+            (None, Some(balance)) if balance.amount().lt(&Self::MAX_TICKET_AMOUNT.into()) => {
+                balance
+            }
             (None, None) => return Err(InvalidInputData("missing ticket amount".into())),
             (Some(_), Some(_)) => {
                 return Err(InvalidInputData(
@@ -464,7 +479,9 @@ impl TicketBuilder {
         }
 
         Ok(Ticket {
-            counterparty: self.counterparty.ok_or(InvalidInputData("missing channel id".into()))?,
+            counterparty: self
+                .counterparty
+                .ok_or(InvalidInputData("missing channel id".into()))?,
             amount,
             index: self.index,
             encoded_win_prob: self.win_prob.into(),
@@ -478,7 +495,11 @@ impl TicketBuilder {
 
     /// Validates all inputs and builds the [VerifiedTicket] by signing the ticket data
     /// with the given key. Fails if [signature](TicketBuilder::signature) was previously set.
-    pub fn build_signed(self, signer: &ChainKeypair, domain_separator: &Hash) -> errors::Result<VerifiedTicket> {
+    pub fn build_signed(
+        self,
+        signer: &ChainKeypair,
+        domain_separator: &Hash,
+    ) -> errors::Result<VerifiedTicket> {
         if self.signature.is_none() {
             Ok(self.build()?.sign(signer, domain_separator))
         } else {
@@ -625,7 +646,10 @@ impl Ticket {
         ret
     }
 
-    fn encode_for_signing(&self, issuer: &Address) -> (ChannelId, [u8; ON_CHAIN_TICKET_SIZE - Signature::SIZE]) {
+    fn encode_for_signing(
+        &self,
+        issuer: &Address,
+    ) -> (ChannelId, [u8; ON_CHAIN_TICKET_SIZE - Signature::SIZE]) {
         let mut ret = [0u8; ON_CHAIN_TICKET_SIZE - Signature::SIZE];
         let mut offset = 0;
 
@@ -645,14 +669,19 @@ impl Ticket {
         let hash_struct = Hash::create(&[&REDEEM_CALL_SELECTOR, &[0u8; 28], ticket_hash.as_ref()]);
         (
             channel_id,
-            Hash::create(&[&hex!("1901"), domain_separator.as_ref(), hash_struct.as_ref()]),
+            Hash::create(&[
+                &hex!("1901"),
+                domain_separator.as_ref(),
+                hash_struct.as_ref(),
+            ]),
         )
     }
 
     /// Signs the ticket using the given private key, turning this ticket into [VerifiedTicket].
     /// If a signature was already present, it will be replaced.
     pub fn sign(mut self, signing_key: &ChainKeypair, domain_separator: &Hash) -> VerifiedTicket {
-        let (channel_id, ticket_hash) = self.get_hash(signing_key.public().as_ref(), domain_separator);
+        let (channel_id, ticket_hash) =
+            self.get_hash(signing_key.public().as_ref(), domain_separator);
         self.signature = Some(Signature::sign_hash(&ticket_hash, signing_key));
         VerifiedTicket {
             ticket: self,
@@ -670,7 +699,11 @@ impl Ticket {
     /// over the secp256k1 curve.
     /// The operation can fail if a public key cannot be recovered from the ticket signature.
     #[instrument(level = "trace", skip_all, err)]
-    pub fn verify(self, issuer: &Address, domain_separator: &Hash) -> Result<VerifiedTicket, Box<Ticket>> {
+    pub fn verify(
+        self,
+        issuer: &Address,
+        domain_separator: &Hash,
+    ) -> Result<VerifiedTicket, Box<Ticket>> {
         let (channel_id, ticket_hash) = self.get_hash(issuer, domain_separator);
 
         if let Some(signature) = &self.signature {
@@ -702,7 +735,8 @@ impl Ticket {
 impl From<Ticket> for [u8; TICKET_SIZE] {
     fn from(value: Ticket) -> Self {
         let mut ret = [0u8; TICKET_SIZE];
-        ret[0..Ticket::SIZE - Signature::SIZE].copy_from_slice(value.encode_for_transfer().as_ref());
+        ret[0..Ticket::SIZE - Signature::SIZE]
+            .copy_from_slice(value.encode_for_transfer().as_ref());
         ret[Ticket::SIZE - Signature::SIZE..].copy_from_slice(
             value
                 .signature
@@ -735,10 +769,12 @@ impl TryFrom<&[u8]> for Ticket {
             channel_epoch[1..4].copy_from_slice(&value[offset..offset + 3]);
             offset += 3;
 
-            let win_prob = WinningProbability::try_from(&value[offset..offset + WinningProbability::SIZE])?;
+            let win_prob =
+                WinningProbability::try_from(&value[offset..offset + WinningProbability::SIZE])?;
             offset += WinningProbability::SIZE;
 
-            let challenge = EthereumChallenge::try_from(&value[offset..offset + EthereumChallenge::SIZE])?;
+            let challenge =
+                EthereumChallenge::try_from(&value[offset..offset + EthereumChallenge::SIZE])?;
             offset += EthereumChallenge::SIZE;
 
             let signature = Signature::try_from(&value[offset..offset + Signature::SIZE])?;
@@ -802,8 +838,15 @@ impl VerifiedTicket {
     /// `[0, 2^56-1]` where 0 -> 0% and 2^56 - 1 -> 100% win
     /// probability. If the ticket's luck value is greater than
     /// the stated probability, it is considered a winning ticket.
-    pub fn is_winning(&self, response: &Response, chain_keypair: &ChainKeypair, domain_separator: &Hash) -> bool {
-        if let Ok(vrf_params) = derive_vrf_parameters(self.hash, chain_keypair, domain_separator.as_ref()) {
+    pub fn is_winning(
+        &self,
+        response: &Response,
+        chain_keypair: &ChainKeypair,
+        domain_separator: &Hash,
+    ) -> bool {
+        if let Ok(vrf_params) =
+            derive_vrf_parameters(self.hash, chain_keypair, domain_separator.as_ref())
+        {
             check_ticket_win(
                 &self.hash,
                 self.ticket
@@ -867,7 +910,10 @@ impl VerifiedTicket {
     /// Creates a new unacknowledged ticket from the [`VerifiedTicket`],
     /// given our own part of the PoR challenge.
     pub fn into_unacknowledged(self, own_key: HalfKey) -> UnacknowledgedTicket {
-        UnacknowledgedTicket { ticket: self, own_key }
+        UnacknowledgedTicket {
+            ticket: self,
+            own_key,
+        }
     }
 
     /// Shorthand to acknowledge the ticket if the matching response is already known.
@@ -918,11 +964,16 @@ impl UnacknowledgedTicket {
     /// Verifies that the given acknowledgement solves this ticket's challenge and then
     /// turns this unacknowledged ticket into an acknowledged ticket by adding
     /// the received acknowledgement of the forwarded packet.
-    pub fn acknowledge(self, acknowledgement: &HalfKey) -> crate::errors::Result<AcknowledgedTicket> {
+    pub fn acknowledge(
+        self,
+        acknowledgement: &HalfKey,
+    ) -> crate::errors::Result<AcknowledgedTicket> {
         let response = Response::from_half_keys(&self.own_key, acknowledgement)?;
         tracing::trace!(ticket = %self.ticket, response = response.to_hex(), "acknowledging ticket using response");
 
-        if self.ticket.verified_ticket().challenge == response.to_challenge()?.to_ethereum_challenge() {
+        if self.ticket.verified_ticket().challenge
+            == response.to_challenge()?.to_ethereum_challenge()
+        {
             Ok(self.ticket.into_acknowledged(response))
         } else {
             Err(CryptoError::InvalidChallenge.into())
@@ -991,7 +1042,8 @@ impl AcknowledgedTicket {
 
     /// Checks if this acknowledged ticket is winning.
     pub fn is_winning(&self, chain_keypair: &ChainKeypair, domain_separator: &Hash) -> bool {
-        self.ticket.is_winning(&self.response, chain_keypair, domain_separator)
+        self.ticket
+            .is_winning(&self.response, chain_keypair, domain_separator)
     }
 
     /// Transforms this ticket into [`RedeemableTicket`] that can be redeemed on-chain
@@ -1005,11 +1057,19 @@ impl AcknowledgedTicket {
         domain_separator: &Hash,
     ) -> errors::Result<RedeemableTicket> {
         // This function must be called by the ticket recipient and not the issuer
-        if chain_keypair.public().to_address().eq(self.ticket.verified_issuer()) {
+        if chain_keypair
+            .public()
+            .to_address()
+            .eq(self.ticket.verified_issuer())
+        {
             return Err(errors::CoreTypesError::LoopbackTicket);
         }
 
-        let vrf_params = derive_vrf_parameters(self.ticket.verified_hash(), chain_keypair, domain_separator.as_ref())?;
+        let vrf_params = derive_vrf_parameters(
+            self.ticket.verified_hash(),
+            chain_keypair,
+            domain_separator.as_ref(),
+        )?;
 
         if !check_ticket_win(
             self.ticket.verified_hash(),
@@ -1077,7 +1137,9 @@ impl RedeemableTicket {
 
 impl PartialEq for RedeemableTicket {
     fn eq(&self, other: &Self) -> bool {
-        self.ticket == other.ticket && self.channel_dst == other.channel_dst && self.response == other.response
+        self.ticket == other.ticket
+            && self.channel_dst == other.channel_dst
+            && self.response == other.response
     }
 }
 
@@ -1169,7 +1231,9 @@ impl TransferableWinningTicket {
 
 impl PartialEq for TransferableWinningTicket {
     fn eq(&self, other: &Self) -> bool {
-        self.ticket == other.ticket && self.signer == other.signer && self.response == other.response
+        self.ticket == other.ticket
+            && self.signer == other.signer
+            && self.response == other.response
     }
 }
 
@@ -1218,7 +1282,10 @@ pub mod tests {
         assert_eq!(0.25f64, WinningProbability::from(&test_bit_string).as_f64());
 
         test_bit_string[0] = 0x1f;
-        assert_eq!(0.125f64, WinningProbability::from(&test_bit_string).as_f64());
+        assert_eq!(
+            0.125f64,
+            WinningProbability::from(&test_bit_string).as_f64()
+        );
 
         Ok(())
     }
@@ -1228,16 +1295,28 @@ pub mod tests {
         assert_eq!([0u8; 7], WinningProbability::try_from(0.0f64)?.as_encoded());
 
         let mut test_bit_string = [0xffu8; 7];
-        assert_eq!(test_bit_string, WinningProbability::try_from(1.0f64)?.as_encoded());
+        assert_eq!(
+            test_bit_string,
+            WinningProbability::try_from(1.0f64)?.as_encoded()
+        );
 
         test_bit_string[0] = 0x7f;
-        assert_eq!(test_bit_string, WinningProbability::try_from(0.5f64)?.as_encoded());
+        assert_eq!(
+            test_bit_string,
+            WinningProbability::try_from(0.5f64)?.as_encoded()
+        );
 
         test_bit_string[0] = 0x3f;
-        assert_eq!(test_bit_string, WinningProbability::try_from(0.25f64)?.as_encoded());
+        assert_eq!(
+            test_bit_string,
+            WinningProbability::try_from(0.25f64)?.as_encoded()
+        );
 
         test_bit_string[0] = 0x1f;
-        assert_eq!(test_bit_string, WinningProbability::try_from(0.125f64)?.as_encoded());
+        assert_eq!(
+            test_bit_string,
+            WinningProbability::try_from(0.125f64)?.as_encoded()
+        );
 
         Ok(())
     }
@@ -1260,7 +1339,9 @@ pub mod tests {
     #[test]
     pub fn test_win_prob_back_and_forth() -> anyhow::Result<()> {
         for float in [0.1f64, 0.002f64, 0.00001f64, 0.7311111f64, 1.0f64, 0.0f64] {
-            assert!((float - WinningProbability::try_from_f64(float)?.as_f64()).abs() < f64::EPSILON);
+            assert!(
+                (float - WinningProbability::try_from_f64(float)?.as_f64()).abs() < f64::EPSILON
+            );
         }
 
         Ok(())
@@ -1288,8 +1369,16 @@ pub mod tests {
 
     #[test]
     pub fn test_win_prob_epsilon_must_be_never() -> anyhow::Result<()> {
-        assert!(WinningProbability::NEVER.approx_eq(&WinningProbability::try_from_f64(WinningProbability::EPSILON)?));
-        assert!(WinningProbability::NEVER.lex_eq(&WinningProbability::try_from_f64(WinningProbability::EPSILON)?));
+        assert!(
+            WinningProbability::NEVER.approx_eq(&WinningProbability::try_from_f64(
+                WinningProbability::EPSILON
+            )?)
+        );
+        assert!(
+            WinningProbability::NEVER.lex_eq(&WinningProbability::try_from_f64(
+                WinningProbability::EPSILON
+            )?)
+        );
         Ok(())
     }
 
@@ -1297,15 +1386,22 @@ pub mod tests {
     pub fn test_win_prob_bounds_must_be_approx_eq() -> anyhow::Result<()> {
         let bound = 0.1 + WinningProbability::EPSILON;
         let other = 0.1;
-        assert!(WinningProbability::try_from_f64(bound)?.approx_eq(&WinningProbability::try_from_f64(other)?));
+        assert!(
+            WinningProbability::try_from_f64(bound)?
+                .approx_eq(&WinningProbability::try_from_f64(other)?)
+        );
         Ok(())
     }
 
     #[test]
-    pub fn test_win_prob_bounds_must_not_be_approx_eq_when_differ_by_more_then_epsilon() -> anyhow::Result<()> {
+    pub fn test_win_prob_bounds_must_not_be_approx_eq_when_differ_by_more_then_epsilon()
+    -> anyhow::Result<()> {
         let bound = 0.1 + 1.1 * WinningProbability::EPSILON;
         let other = 0.1;
-        assert!(!WinningProbability::try_from_f64(bound)?.approx_eq(&WinningProbability::try_from_f64(other)?));
+        assert!(
+            !WinningProbability::try_from_f64(bound)?
+                .approx_eq(&WinningProbability::try_from_f64(other)?)
+        );
         Ok(())
     }
 
@@ -1313,7 +1409,10 @@ pub mod tests {
     pub fn test_win_prob_bounds_must_not_be_lex_eq() -> anyhow::Result<()> {
         let bound = 0.1 + WinningProbability::EPSILON;
         let other = 0.1;
-        assert!(!WinningProbability::try_from_f64(bound)?.lex_eq(&WinningProbability::try_from_f64(other)?));
+        assert!(
+            !WinningProbability::try_from_f64(bound)?
+                .lex_eq(&WinningProbability::try_from_f64(other)?)
+        );
         Ok(())
     }
 
@@ -1388,7 +1487,11 @@ pub mod tests {
         );
 
         let ticket = initial_ticket.leak();
-        assert!(ticket.verify(&ALICE.public().to_address(), &Default::default()).is_ok());
+        assert!(
+            ticket
+                .verify(&ALICE.public().to_address(), &Default::default())
+                .is_ok()
+        );
 
         Ok(())
     }
@@ -1431,9 +1534,13 @@ pub mod tests {
 
     #[test]
     fn test_unacknowledged_ticket_challenge_response() -> anyhow::Result<()> {
-        let hk1 = HalfKey::try_from(hex!("3477d7de923ba3a7d5d72a7d6c43fd78395453532d03b2a1e2b9a7cc9b61bafa").as_ref())?;
+        let hk1 = HalfKey::try_from(
+            hex!("3477d7de923ba3a7d5d72a7d6c43fd78395453532d03b2a1e2b9a7cc9b61bafa").as_ref(),
+        )?;
 
-        let hk2 = HalfKey::try_from(hex!("4471496ef88d9a7d86a92b7676f3c8871a60792a37fae6fc3abc347c3aa3b16b").as_ref())?;
+        let hk2 = HalfKey::try_from(
+            hex!("4471496ef88d9a7d86a92b7676f3c8871a60792a37fae6fc3abc347c3aa3b16b").as_ref(),
+        )?;
 
         let challenge = Response::from_half_keys(&hk1, &hk2)?.to_challenge()?;
 
@@ -1454,8 +1561,9 @@ pub mod tests {
     #[test]
     #[cfg(feature = "serde")]
     fn test_acknowledged_ticket_serde() -> anyhow::Result<()> {
-        let response =
-            Response::try_from(hex!("876a41ee5fb2d27ac14d8e8d552692149627c2f52330ba066f9e549aef762f73").as_ref())?;
+        let response = Response::try_from(
+            hex!("876a41ee5fb2d27ac14d8e8d552692149627c2f52330ba066f9e549aef762f73").as_ref(),
+        )?;
 
         let dst = Hash::default();
 
@@ -1504,7 +1612,8 @@ pub mod tests {
 
         let transferable = acknowledged.into_transferable(&BOB, &Hash::default())?;
 
-        let redeemable_2 = transferable.into_redeemable(&ALICE.public().to_address(), &Hash::default())?;
+        let redeemable_2 =
+            transferable.into_redeemable(&ALICE.public().to_address(), &Hash::default())?;
 
         assert_eq!(redeemable_1, redeemable_2);
         assert_eq!(redeemable_1.vrf_params.V, redeemable_2.vrf_params.V);

@@ -1,8 +1,8 @@
 use hopr_crypto_random::Randomizable;
 use hopr_crypto_types::prelude::*;
+use hopr_primitive_types::prelude::*;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
-use hopr_primitive_types::prelude::*;
 
 use crate::{
     errors::{CoreTypesError, Result},
@@ -30,7 +30,9 @@ pub type HoprPseudonym = SimplePseudonym;
 /// key of its sender.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Acknowledgement(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE]);
+pub struct Acknowledgement(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
 
 impl AsRef<[u8]> for Acknowledgement {
     fn as_ref(&self) -> &[u8] {
@@ -42,11 +44,9 @@ impl TryFrom<&[u8]> for Acknowledgement {
     type Error = GeneralError;
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        Ok(Self(
-            value
-                .try_into()
-                .map_err(|_| GeneralError::ParseError("Acknowledgement".into()))?,
-        ))
+        Ok(Self(value.try_into().map_err(|_| {
+            GeneralError::ParseError("Acknowledgement".into())
+        })?))
     }
 }
 
@@ -60,7 +60,9 @@ pub const MIN_BATCH_SIZE: usize = 4; // TODO: update this based on benchmarks
 impl Acknowledgement {
     /// Attempts to verify the acknowledgement given the `sender_node_key` that sent the acknowledgement.
     pub fn verify(self, sender_node_key: &OffchainPublicKey) -> Result<VerifiedAcknowledgement> {
-        let signature = OffchainSignature::try_from(&self.0[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE])?;
+        let signature = OffchainSignature::try_from(
+            &self.0[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE],
+        )?;
         if signature.verify_message(&self.0[0..HalfKey::SIZE], sender_node_key) {
             Ok(VerifiedAcknowledgement {
                 ack_key_share: HalfKey::try_from(&self.0[0..HalfKey::SIZE])?,
@@ -104,28 +106,32 @@ impl Acknowledgement {
         let mut optimistic_result = Vec::with_capacity(sz_lower_bound);
         let mut keys = Vec::with_capacity(sz_lower_bound);
 
-        let optimistic_check = OffchainSignature::verify_batch(acknowledgements.filter_map(|(key, ack)| {
-            let maybe_ack_int = HalfKey::try_from(&ack.0[0..HalfKey::SIZE]).and_then(|ack_key_share| {
-                OffchainSignature::try_from(&ack.0[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE])
-                    .map(|signature| (ack_key_share, signature))
-            });
+        let optimistic_check =
+            OffchainSignature::verify_batch(acknowledgements.filter_map(|(key, ack)| {
+                let maybe_ack_int =
+                    HalfKey::try_from(&ack.0[0..HalfKey::SIZE]).and_then(|ack_key_share| {
+                        OffchainSignature::try_from(
+                            &ack.0[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE],
+                        )
+                        .map(|signature| (ack_key_share, signature))
+                    });
 
-            match maybe_ack_int {
-                Ok((ack_key_share, signature)) => {
-                    optimistic_result.push(Ok(VerifiedAcknowledgement {
-                        ack_key_share,
-                        signature,
-                    }));
-                    keys.push(Some(key)); // Store the keys in case we need to verify again
-                    Some(((ack_key_share, signature), key))
+                match maybe_ack_int {
+                    Ok((ack_key_share, signature)) => {
+                        optimistic_result.push(Ok(VerifiedAcknowledgement {
+                            ack_key_share,
+                            signature,
+                        }));
+                        keys.push(Some(key)); // Store the keys in case we need to verify again
+                        Some(((ack_key_share, signature), key))
+                    }
+                    Err(err) => {
+                        optimistic_result.push(Err(err.into()));
+                        keys.push(None);
+                        None
+                    }
                 }
-                Err(err) => {
-                    optimistic_result.push(Err(err.into()));
-                    keys.push(None);
-                    None
-                }
-            }
-        }));
+            }));
 
         // If the batch verification succeeded, we can return the entire batch as verified.
         // Otherwise, we need to check individual acknowledgements to see which ones failed.
@@ -173,7 +179,8 @@ impl VerifiedAcknowledgement {
     pub fn leak(self) -> Acknowledgement {
         let mut ret = [0u8; Acknowledgement::SIZE];
         ret[0..HalfKey::SIZE].copy_from_slice(self.ack_key_share.as_ref());
-        ret[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE].copy_from_slice(self.signature.as_ref());
+        ret[HalfKey::SIZE..HalfKey::SIZE + OffchainSignature::SIZE]
+            .copy_from_slice(self.signature.as_ref());
         Acknowledgement(ret)
     }
 
@@ -228,7 +235,10 @@ mod tests {
 
         assert_eq!(batch_size, res.len());
         assert!(res.iter().all(|r| r.is_ok()));
-        assert_eq!(verified_acks, res.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>());
+        assert_eq!(
+            verified_acks,
+            res.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>()
+        );
 
         Ok(())
     }

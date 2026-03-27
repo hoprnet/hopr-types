@@ -19,7 +19,6 @@
     flake-root.url = "github:srid/flake-root";
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
-
     # Input dependency optimization
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
     nix-lib.inputs.nixpkgs.follows = "nixpkgs";

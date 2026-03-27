@@ -45,8 +45,8 @@ pub mod prelude {
     pub use chrono::{DateTime, Utc};
 
     pub use super::{
-        balance::*, bounded::BoundedVec, errors::GeneralError, f64_approx_eq, primitives::*, to_hex_shortened,
-        traits::*,
+        balance::*, bounded::BoundedVec, errors::GeneralError, f64_approx_eq, primitives::*,
+        to_hex_shortened, traits::*,
     };
 }
 
@@ -70,6 +70,9 @@ mod tests {
         assert_eq!(&to_hex_shortened::<9>(&hex!("deadbeefcafe")), "de..fe");
         assert_eq!(&to_hex_shortened::<10>(&hex!("deadbeefcafe")), "dead..cafe");
         assert_eq!(&to_hex_shortened::<11>(&hex!("deadbeefcafe")), "dead..cafe");
-        assert_eq!(&to_hex_shortened::<12>(&hex!("deadbeefcafe")), "deadbeefcafe");
+        assert_eq!(
+            &to_hex_shortened::<12>(&hex!("deadbeefcafe")),
+            "deadbeefcafe"
+        );
     }
 }

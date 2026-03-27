@@ -57,13 +57,25 @@ impl Display for ChainEvent {
         match self {
             ChainEvent::Announcement(a) => write!(f, "announcement event of {a}"),
             ChainEvent::ChannelOpened(c) => write!(f, "open channel event {}", c.get_id()),
-            ChainEvent::ChannelClosureInitiated(c) => write!(f, "close channel initiation event {}", c.get_id()),
+            ChainEvent::ChannelClosureInitiated(c) => {
+                write!(f, "close channel initiation event {}", c.get_id())
+            }
             ChainEvent::ChannelClosed(c) => write!(f, "close channel event {}", c.get_id()),
-            ChainEvent::ChannelBalanceIncreased(c, _) => write!(f, "channel increase balance event {}", c.get_id()),
-            ChainEvent::ChannelBalanceDecreased(c, _) => write!(f, "channel decrease balance event {}", c.get_id()),
-            ChainEvent::TicketRedeemed(c, _) => write!(f, "ticket redeem event in channel {}", c.get_id()),
-            ChainEvent::WinningProbabilityIncreased(p) => write!(f, "winning probability increased to {p}"),
-            ChainEvent::WinningProbabilityDecreased(p) => write!(f, "winning probability decreased to {p}"),
+            ChainEvent::ChannelBalanceIncreased(c, _) => {
+                write!(f, "channel increase balance event {}", c.get_id())
+            }
+            ChainEvent::ChannelBalanceDecreased(c, _) => {
+                write!(f, "channel decrease balance event {}", c.get_id())
+            }
+            ChainEvent::TicketRedeemed(c, _) => {
+                write!(f, "ticket redeem event in channel {}", c.get_id())
+            }
+            ChainEvent::WinningProbabilityIncreased(p) => {
+                write!(f, "winning probability increased to {p}")
+            }
+            ChainEvent::WinningProbabilityDecreased(p) => {
+                write!(f, "winning probability decreased to {p}")
+            }
             ChainEvent::TicketPriceChanged(p) => write!(f, "ticket price changed to {p}"),
         }
     }

@@ -100,7 +100,8 @@ impl From<&OffchainKeypair> for curve25519_dalek::scalar::Scalar {
 
 impl From<&OffchainKeypair> for libp2p_identity::Keypair {
     fn from(value: &OffchainKeypair) -> Self {
-        libp2p_identity::Keypair::ed25519_from_bytes(value.0.clone()).expect("invalid offchain keypair")
+        libp2p_identity::Keypair::ed25519_from_bytes(value.0.clone())
+            .expect("invalid offchain keypair")
         // must not happen
     }
 }
@@ -185,7 +186,11 @@ mod tests {
         let kp_1 = OffchainKeypair::random();
 
         let public = OffchainPublicKey::from_privkey(kp_1.secret().as_ref()).unwrap();
-        assert_eq!(&public, kp_1.public(), "secret keys must yield compatible public keys");
+        assert_eq!(
+            &public,
+            kp_1.public(),
+            "secret keys must yield compatible public keys"
+        );
 
         let kp_2 = OffchainKeypair::from_secret(kp_1.secret().as_ref()).unwrap();
         assert_eq!(
@@ -193,8 +198,16 @@ mod tests {
             1,
             "keypairs generated from secrets must be equal"
         );
-        assert_eq!(&public, kp_2.public(), "secret keys must yield compatible public keys");
-        assert_eq!(kp_1.public(), kp_2.public(), "keypair public keys must be equal");
+        assert_eq!(
+            &public,
+            kp_2.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            kp_1.public(),
+            kp_2.public(),
+            "keypair public keys must be equal"
+        );
 
         let (s1, p1) = kp_1.unzip();
         let (s2, p2) = kp_2.unzip();
@@ -219,7 +232,11 @@ mod tests {
         let kp_1 = ChainKeypair::random();
 
         let public = PublicKey::from_privkey(kp_1.secret().as_ref()).unwrap();
-        assert_eq!(&public, kp_1.public(), "secret keys must yield compatible public keys");
+        assert_eq!(
+            &public,
+            kp_1.public(),
+            "secret keys must yield compatible public keys"
+        );
 
         let kp_2 = ChainKeypair::from_secret(kp_1.secret().as_ref()).unwrap();
         assert_eq!(
@@ -227,8 +244,16 @@ mod tests {
             1,
             "keypairs generated from secrets must be equal"
         );
-        assert_eq!(&public, kp_2.public(), "secret keys must yield compatible public keys");
-        assert_eq!(kp_1.public(), kp_2.public(), "keypair public keys must be equal");
+        assert_eq!(
+            &public,
+            kp_2.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            kp_1.public(),
+            kp_2.public(),
+            "keypair public keys must be equal"
+        );
 
         let (s1, p1) = kp_1.unzip();
         let (s2, p2) = kp_2.unzip();

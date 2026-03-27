@@ -1,5 +1,7 @@
 #[cfg(feature = "use-bindings")]
-use hopr_bindings::exports::alloy::{contract::Error as ContractError, signers::Error as SignerError};
+use hopr_bindings::exports::alloy::{
+    contract::Error as ContractError, signers::Error as SignerError,
+};
 
 /// Dynamic contract result type.
 pub type Result<T, E = ChainTypesError> = core::result::Result<T, E>;
