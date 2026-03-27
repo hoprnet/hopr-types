@@ -69,6 +69,7 @@ in
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_bindings.rlib
   lib-hopr-types-x86_64-linux = buildLib builders."x86_64-linux" { };
+  lib-hopr-types-aarch64-linux = buildLib builders."aarch64-linux" { };
   lib-hopr-types-x86_64-darwin = buildLib builders."x86_64-darwin" { };
   lib-hopr-types-aarch64-darwin = buildLib builders."aarch64-darwin" { };
   lib-hopr-types = buildLib builders.local { };

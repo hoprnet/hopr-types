@@ -229,6 +229,7 @@
               docs
               lib-hopr-types
               lib-hopr-types-x86_64-linux
+              lib-hopr-types-aarch64-linux
               lib-hopr-types-x86_64-darwin
               lib-hopr-types-aarch64-darwin
               ;
