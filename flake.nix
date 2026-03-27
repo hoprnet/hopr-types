@@ -167,7 +167,6 @@
               "Makefile"
               ".github/workflows/build-binaries.yaml"
               "docs/*"
-              "nix/setup-hook-darwin.sh"
               "target/*"
               "vendor/*"
             ];
@@ -208,30 +207,37 @@
             programs.ruff-format.enable = true;
 
             settings.formatter.rustfmt = {
-              command = "${pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default)}/bin/rustfmt";
+              command = "${stableToolchain}/bin/rustfmt";
             };
           };
 
           checks = {
             inherit (hoprTypesPackages) clippy;
+            inherit pre-commit-check;
           };
 
           apps = {
-            update-github-labels = nixLib.mkUpdateGithubLabelsApp;
-            check = nixLib.mkCheckApp { inherit system; };
-            audit = nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; };
+            update-github-labels = nixLib.mkUpdateGithubLabelsApp // {
+              meta.description = "Update GitHub labels from repository configuration";
+            };
+            check = (nixLib.mkCheckApp { inherit system; }) // {
+              meta.description = "Run all CI checks for the current system";
+            };
+            audit = (nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; }) // {
+              meta.description = "Run cargo audit to check for security vulnerabilities";
+            };
           };
 
           packages = {
-            inherit (hoprTypesPackages)
-              test
-              docs
-              lib-hopr-types
-              lib-hopr-types-x86_64-linux
-              lib-hopr-types-aarch64-linux
-              lib-hopr-types-x86_64-darwin
-              lib-hopr-types-aarch64-darwin
-              ;
+            inherit (hoprTypesPackages) test lib-hopr-types;
+          }
+          // lib.optionalAttrs pkgs.stdenv.isLinux {
+            inherit (hoprTypesPackages) lib-hopr-types-x86_64-linux lib-hopr-types-aarch64-linux;
+          }
+          // lib.optionalAttrs pkgs.stdenv.isDarwin {
+            inherit (hoprTypesPackages) lib-hopr-types-x86_64-darwin lib-hopr-types-aarch64-darwin;
+          }
+          // {
             inherit pre-commit-check;
             default = hoprTypesPackages.lib-hopr-types;
           };

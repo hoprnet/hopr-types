@@ -54,8 +54,6 @@ in
 
   test = buildLib builders.local { runTests = true; };
 
-  docs = buildLib builders.localNightly { buildDocs = true; };
-
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib
   lib-hopr-types-x86_64-linux = buildLib builders."x86_64-linux" { };
