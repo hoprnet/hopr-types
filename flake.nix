@@ -238,7 +238,7 @@
               type = "app";
               program = toString (
                 pkgs.writeShellScript "coverage-unit" ''
-                  nix develop .#coverage -c cargo llvm-cov --workspace --lib --lcov --output-path coverage.lcov
+                  nix develop .#coverage -c cargo llvm-cov --workspace --features all-types,fixed-rng --lib --lcov --output-path coverage.lcov
                 ''
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
