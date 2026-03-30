@@ -53,9 +53,7 @@ in
 
   clippy = buildLib builders.local { runClippy = true; };
 
-  test = (buildLib builders.local { runTests = true; }).overrideAttrs (old: {
-    INSTA_WORKSPACE_ROOT = src;
-  });
+  test = buildLib builders.local { runTests = true; };
 
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib
