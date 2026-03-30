@@ -148,6 +148,9 @@
               }
               // shellArgs
             );
+            ci = pkgs.mkShell {
+              packages = [ pkgs.zizmor ];
+            };
           };
         in
         {
