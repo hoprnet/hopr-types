@@ -236,9 +236,11 @@
             };
             coverage-unit = {
               type = "app";
-              program = toString (pkgs.writeShellScript "coverage-unit" ''
-                nix develop .#coverage -c cargo llvm-cov --lib --lcov --output-path coverage.lcov
-              '');
+              program = toString (
+                pkgs.writeShellScript "coverage-unit" ''
+                  nix develop .#coverage -c cargo llvm-cov --lib --lcov --output-path coverage.lcov
+                ''
+              );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
             };
           };
