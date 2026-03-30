@@ -21,6 +21,7 @@ let
 
   src = nixLib.mkSrc {
     inherit root fs;
+    extraExtensions = [ "snap" ];
   };
 
   cargoToml = ../../Cargo.toml;
@@ -52,7 +53,9 @@ in
 
   clippy = buildLib builders.local { runClippy = true; };
 
-  test = buildLib builders.local { runTests = true; };
+  test = (buildLib builders.local { runTests = true; }).overrideAttrs (old: {
+    INSTA_WORKSPACE_ROOT = src;
+  });
 
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib
