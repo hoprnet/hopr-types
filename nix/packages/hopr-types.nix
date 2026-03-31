@@ -21,6 +21,7 @@ let
 
   src = nixLib.mkSrc {
     inherit root fs;
+    extraExtensions = [ "snap" ];
   };
 
   cargoToml = ../../Cargo.toml;

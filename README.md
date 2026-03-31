@@ -1,5 +1,7 @@
 # HOPR Types
 
+[![codecov](https://codecov.io/gh/hoprnet/hopr-types/branch/main/graph/badge.svg)](https://codecov.io/gh/hoprnet/hopr-types)
+
 A collection of Rust types used within the HOPR network and related projects.
 
 The exposed types are used in both internal **and** external HOPR APIs.
