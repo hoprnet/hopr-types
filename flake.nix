@@ -148,6 +148,14 @@
               }
               // shellArgs
             );
+            coverage = nixLib.mkDevShell {
+              rustToolchainFile = ./rust-toolchain.toml;
+              shellName = "Coverage";
+              withLlvmTools = true;
+            };
+            ci = pkgs.mkShell {
+              packages = [ pkgs.zizmor ];
+            };
           };
         in
         {
@@ -225,6 +233,15 @@
             };
             audit = (nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; }) // {
               meta.description = "Run cargo audit to check for security vulnerabilities";
+            };
+            coverage-unit = {
+              type = "app";
+              program = toString (
+                pkgs.writeShellScript "coverage-unit" ''
+                  nix develop .#coverage -c cargo llvm-cov --workspace --features all-types,fixed-rng --lib --lcov --output-path coverage.lcov
+                ''
+              );
+              meta.description = "Generate unit test coverage report (coverage.lcov)";
             };
           };
 
