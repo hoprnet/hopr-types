@@ -74,7 +74,7 @@ jobs:
       - build-library
       - coverage
       - publish
-    if: ${{ failure() }}
+    if: ${{ always() && github.event.pull_request.merged == true && !success() }}
     runs-on: ubuntu-latest
     steps:
       - name: Notify failed merge pipeline
