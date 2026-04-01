@@ -46,7 +46,7 @@ jobs:
     name: Publish / hopr-primitive-types
     needs: [build-library]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
@@ -61,7 +61,7 @@ jobs:
     name: Publish / hopr-crypto-random
     needs: [publish-primitive-types]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
@@ -76,7 +76,7 @@ jobs:
     name: Publish / hopr-crypto-types
     needs: [publish-crypto-random]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
@@ -91,7 +91,7 @@ jobs:
     name: Publish / hopr-chain-types
     needs: [publish-crypto-types]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
@@ -106,7 +106,7 @@ jobs:
     name: Publish / hopr-internal-types
     needs: [publish-chain-types]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
@@ -121,7 +121,7 @@ jobs:
     name: Publish / hopr-types
     needs: [publish-internal-types]
     if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@kauki/feat/ci/publish-crates-workflow
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@f3f77b8291dc10662e8d2ae291b6298a170dad88 # publish-crates-v1
     permissions:
       contents: read
     with:
