@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 
 use hopr_primitive_types::prelude::{GeneralError::ParseError, *};
-use sha2::Sha512;
 
 use crate::prelude::*;
 
@@ -259,7 +258,8 @@ impl OffchainSignature {
         // Ed25519 See https://github.com/MystenLabs/ed25519-unsafe-libs for details
         let verifying = ed25519_dalek::VerifyingKey::from(signing_keypair.public().edwards);
 
-        ed25519_dalek::hazmat::raw_sign::<Sha512>(&expanded_sk, msg, &verifying).into()
+        ed25519_dalek::hazmat::raw_sign::<ed25519_dalek::Sha512>(&expanded_sk, msg, &verifying)
+            .into()
     }
 
     /// Verify this signature of the given message and [OffchainPublicKey].

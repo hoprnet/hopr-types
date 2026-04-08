@@ -8,12 +8,12 @@ use std::{
     str::FromStr,
 };
 
-use cipher::crypto_common::OutputSizeUser;
+//use cipher::common::OutputSizeUser;
 use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     montgomery::MontgomeryPoint,
 };
-use digest::Digest;
+use digest::{Digest, OutputSizeUser};
 use elliptic_curve::NonZeroScalar;
 use generic_array::GenericArray;
 use hopr_crypto_random::Randomizable;
