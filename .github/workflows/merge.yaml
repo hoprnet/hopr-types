@@ -42,84 +42,9 @@ jobs:
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  publish-primitive-types:
-    name: Publish / hopr-primitive-types
+  publish-dry-run:
+    name: Publish
     needs: [build-library]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-primitive-types
-      version_type: pr
-      runner: self-hosted-hoprnet-bigger
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-crypto-random:
-    name: Publish / hopr-crypto-random
-    needs: [publish-primitive-types]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-crypto-random
-      version_type: pr
-      runner: self-hosted-hoprnet-bigger
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-crypto-types:
-    name: Publish / hopr-crypto-types
-    needs: [publish-crypto-random]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-crypto-types
-      version_type: pr
-      runner: self-hosted-hoprnet-bigger
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-chain-types:
-    name: Publish / hopr-chain-types
-    needs: [publish-crypto-types]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-chain-types
-      version_type: pr
-      runner: self-hosted-hoprnet-bigger
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-internal-types:
-    name: Publish / hopr-internal-types
-    needs: [publish-chain-types]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-internal-types
-      version_type: pr
-      runner: self-hosted-hoprnet-bigger
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-types:
-    name: Publish / hopr-types
-    needs: [publish-internal-types]
     if: github.event.pull_request.merged == true
     uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
     permissions:
@@ -137,7 +62,7 @@ jobs:
     needs:
       - build-library
       - coverage
-      - publish-types
+      - publish-dry-run
     if: ${{ always() && github.event.pull_request.merged == true && !success() }}
     runs-on: ubuntu-latest
     steps:
