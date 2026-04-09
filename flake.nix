@@ -135,6 +135,7 @@
               ${pre-commit-check.shellHook}
             '';
             extraPackages = with pkgs; [
+              cargo-nextest
               sqlite
               yq-go
             ];
@@ -152,6 +153,7 @@
               rustToolchainFile = ./rust-toolchain.toml;
               shellName = "Coverage";
               withLlvmTools = true;
+              extraPackages = with pkgs; [ cargo-nextest ];
             };
             ci = pkgs.mkShell {
               packages = [ pkgs.zizmor ];
@@ -238,7 +240,7 @@
               type = "app";
               program = toString (
                 pkgs.writeShellScript "coverage-unit" ''
-                  nix develop .#coverage -c cargo llvm-cov --workspace --features all-types,fixed-rng,use-bindings,serde --lib --lcov --output-path coverage.lcov
+                  nix develop .#coverage -c cargo llvm-cov nextest --workspace --features all-types,fixed-rng,use-bindings,serde --lib --lcov --output-path coverage.lcov
                 ''
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
