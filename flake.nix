@@ -239,6 +239,7 @@
               type = "app";
               program = toString (
                 pkgs.writeShellScript "coverage-unit" ''
+                  set -euo pipefail
                   nix build -L .#coverage-unit
                   cp result/coverage.lcov coverage.lcov
                   echo "Coverage report written to coverage.lcov"
