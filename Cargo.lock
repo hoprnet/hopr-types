@@ -2297,7 +2297,8 @@ dependencies = [
 [[package]]
 name = "hopr-bindings"
 version = "4.7.2"
-source = "git+https://github.com/hoprnet/contracts?branch=main#48303db6ae7ad07a946a4c93193836f46f1ac132"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fca8b46c551c4adbd344d7d98690988f0ae830fbc0e9d583db04e3c177bf1ce4"
 dependencies = [
  "alloy",
  "anyhow",

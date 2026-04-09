@@ -1,4 +1,4 @@
-# api.nix - HOPR api Rust package definitions
+# hopr-types.nix - HOPR types Rust package definitions
 #
 # Builds the hopr-types crate for multiple platforms using nix-lib builders.
 # Source filtering, rev, and build arguments are all defined here.
@@ -25,15 +25,6 @@ let
   };
 
   cargoToml = ../../Cargo.toml;
-
-  buildArgs = {
-    inherit
-      src
-      depsSrc
-      rev
-      cargoToml
-      ;
-  };
 
   buildLib =
     builder: args:
