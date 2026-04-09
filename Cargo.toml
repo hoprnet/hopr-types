@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.5.1"
+version = "1.5.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
