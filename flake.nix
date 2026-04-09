@@ -5,6 +5,7 @@
     # Core Nix ecosystem dependencies
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
@@ -58,6 +59,7 @@
             (import rust-overlay)
           ];
           pkgs = import nixpkgs { inherit localSystem overlays; };
+          pkgsUnstable = import inputs.nixpkgs-unstable { inherit localSystem; };
 
           # Platform information
           buildPlatform = pkgs.stdenv.buildPlatform;
@@ -80,6 +82,7 @@
               builders
               nixLib
               pkgs
+              pkgsUnstable
               self
               lib
               ;

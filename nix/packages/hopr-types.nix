@@ -7,6 +7,7 @@
   builders,
   nixLib,
   pkgs,
+  pkgsUnstable,
   self,
   lib,
 }:
@@ -67,15 +68,17 @@ in
     (buildLib builders.localCoverage {
       runTests = true;
       cargoExtraArgs = allFeaturesWithFixedRng;
-      extraNativeBuildInputs = [ pkgs.cargo-nextest ];
+      extraNativeBuildInputs = [
+        pkgs.cargo-nextest
+        pkgsUnstable.cargo-llvm-cov
+      ];
     }).overrideAttrs
       (_: {
         checkPhase = ''
+          mkdir -p $out
           cargo llvm-cov nextest --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast --lcov --output-path $out/coverage.lcov
         '';
-        installPhase = ''
-          mkdir -p $out
-        '';
+        installPhase = "true";
       });
 
   # Cross-compiled rlib packages
