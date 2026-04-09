@@ -51,9 +51,15 @@ let
 in
 {
 
-  clippy = buildLib builders.local { runClippy = true; };
+  clippy = buildLib builders.local {
+    runClippy = true;
+    cargoExtraArgs = "--features all-types,use-bindings,serde";
+  };
 
-  test = buildLib builders.local { runTests = true; };
+  test = buildLib builders.local {
+    runTests = true;
+    cargoExtraArgs = "--features all-types,fixed-rng,use-bindings,serde";
+  };
 
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib
