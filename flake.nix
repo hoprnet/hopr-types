@@ -5,6 +5,7 @@
     # Core Nix ecosystem dependencies
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
@@ -58,6 +59,7 @@
             (import rust-overlay)
           ];
           pkgs = import nixpkgs { inherit localSystem overlays; };
+          pkgsUnstable = import inputs.nixpkgs-unstable { inherit localSystem; };
 
           # Platform information
           buildPlatform = pkgs.stdenv.buildPlatform;
@@ -79,6 +81,8 @@
             inherit
               builders
               nixLib
+              pkgs
+              pkgsUnstable
               self
               lib
               ;
@@ -238,7 +242,10 @@
               type = "app";
               program = toString (
                 pkgs.writeShellScript "coverage-unit" ''
-                  nix develop .#coverage -c cargo llvm-cov --workspace --features all-types,fixed-rng --lib --lcov --output-path coverage.lcov
+                  set -euo pipefail
+                  nix build -L .#coverage-unit
+                  cp result/coverage.lcov coverage.lcov
+                  echo "Coverage report written to coverage.lcov"
                 ''
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
@@ -246,7 +253,7 @@
           };
 
           packages = {
-            inherit (hoprTypesPackages) test lib-hopr-types;
+            inherit (hoprTypesPackages) test coverage-unit lib-hopr-types;
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {
             inherit (hoprTypesPackages) lib-hopr-types-x86_64-linux lib-hopr-types-aarch64-linux;

@@ -1,4 +1,4 @@
-# api.nix - HOPR api Rust package definitions
+# hopr-types.nix - HOPR types Rust package definitions
 #
 # Builds the hopr-types crate for multiple platforms using nix-lib builders.
 # Source filtering, rev, and build arguments are all defined here.
@@ -6,6 +6,8 @@
 {
   builders,
   nixLib,
+  pkgs,
+  pkgsUnstable,
   self,
   lib,
 }:
@@ -26,14 +28,8 @@ let
 
   cargoToml = ../../Cargo.toml;
 
-  buildArgs = {
-    inherit
-      src
-      depsSrc
-      rev
-      cargoToml
-      ;
-  };
+  allFeatures = "--features all-types,use-bindings,serde";
+  allFeaturesWithFixedRng = "--features all-types,fixed-rng,use-bindings,serde";
 
   buildLib =
     builder: args:
@@ -51,9 +47,39 @@ let
 in
 {
 
-  clippy = buildLib builders.local { runClippy = true; };
+  clippy = buildLib builders.local {
+    runClippy = true;
+    cargoExtraArgs = allFeatures;
+  };
 
-  test = buildLib builders.local { runTests = true; };
+  test =
+    (buildLib builders.local {
+      runTests = true;
+      cargoExtraArgs = allFeaturesWithFixedRng;
+      extraNativeBuildInputs = [ pkgs.cargo-nextest ];
+    }).overrideAttrs
+      (_: {
+        checkPhase = ''
+          cargo nextest run --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast
+        '';
+      });
+
+  coverage-unit =
+    (buildLib builders.localCoverage {
+      runTests = true;
+      cargoExtraArgs = allFeaturesWithFixedRng;
+      extraNativeBuildInputs = [
+        pkgs.cargo-nextest
+        pkgsUnstable.cargo-llvm-cov
+      ];
+    }).overrideAttrs
+      (_: {
+        checkPhase = ''
+          mkdir -p $out
+          cargo llvm-cov nextest --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast --lcov --output-path $out/coverage.lcov
+        '';
+        installPhase = "true";
+      });
 
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib

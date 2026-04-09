@@ -2297,7 +2297,8 @@ dependencies = [
 [[package]]
 name = "hopr-bindings"
 version = "4.7.2"
-source = "git+https://github.com/hoprnet/contracts?branch=main#48303db6ae7ad07a946a4c93193836f46f1ac132"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fca8b46c551c4adbd344d7d98690988f0ae830fbc0e9d583db04e3c177bf1ce4"
 dependencies = [
  "alloy",
  "anyhow",
@@ -2312,132 +2313,60 @@ dependencies = [
 ]
 
 [[package]]
-name = "hopr-chain-types"
-version = "1.4.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "hex",
- "hex-literal",
- "hopr-bindings",
- "hopr-crypto-types",
- "hopr-internal-types",
- "hopr-primitive-types",
- "insta",
- "lazy_static",
- "multiaddr",
- "postcard",
- "serde",
- "serde_json",
- "serde_with",
- "strum 0.28.0",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "hopr-crypto-random"
-version = "1.4.2"
-dependencies = [
- "generic-array 1.3.5",
- "lazy_static",
- "rand 0.10.0",
-]
-
-[[package]]
-name = "hopr-crypto-types"
-version = "1.4.2"
+name = "hopr-types"
+version = "1.5.0"
 dependencies = [
  "aes",
  "anyhow",
+ "aquamarine",
+ "async-trait",
+ "bigdecimal",
+ "bimap",
  "blake3",
  "chacha20 0.9.1",
+ "chrono",
  "cipher",
  "criterion",
  "ctr",
  "curve25519-dalek",
  "digest 0.10.7",
  "ed25519-dalek",
+ "float-cmp",
  "generic-array 1.3.5",
  "hex",
  "hex-literal",
- "hopr-crypto-random",
- "hopr-primitive-types",
+ "hopr-bindings",
+ "insta",
  "k256",
  "lazy_static",
  "libp2p-identity",
  "mimalloc",
- "poly1305",
- "primitive-types 0.14.0",
- "secp256k1 0.31.1",
- "serde",
- "serde_bytes",
- "sha2",
- "sha3",
- "subtle",
- "thiserror",
- "tikv-jemallocator",
- "typenum",
- "zeroize",
-]
-
-[[package]]
-name = "hopr-internal-types"
-version = "1.4.2"
-dependencies = [
- "anyhow",
- "aquamarine",
- "async-trait",
- "bimap",
- "hex",
- "hex-literal",
- "hopr-crypto-random",
- "hopr-crypto-types",
- "hopr-primitive-types",
- "lazy_static",
  "mockall",
  "multiaddr",
  "num_enum",
  "parameterized",
+ "poly1305",
  "postcard",
+ "primitive-types 0.14.0",
+ "rand 0.10.0",
  "rayon",
+ "regex",
+ "secp256k1 0.31.1",
  "serde",
  "serde_bytes",
+ "serde_json",
+ "serde_with",
+ "sha2",
+ "sha3",
  "smart-default",
  "strum 0.28.0",
+ "subtle",
  "thiserror",
+ "tikv-jemallocator",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "hopr-primitive-types"
-version = "1.4.2"
-dependencies = [
- "anyhow",
- "bigdecimal",
- "chrono",
- "float-cmp",
- "hex",
- "hex-literal",
- "lazy_static",
- "primitive-types 0.14.0",
- "regex",
- "serde",
- "serde_bytes",
- "sha3",
- "thiserror",
-]
-
-[[package]]
-name = "hopr-types"
-version = "1.4.2"
-dependencies = [
- "hopr-chain-types",
- "hopr-crypto-random",
- "hopr-crypto-types",
- "hopr-internal-types",
- "hopr-primitive-types",
+ "typenum",
+ "zeroize",
 ]
 
 [[package]]

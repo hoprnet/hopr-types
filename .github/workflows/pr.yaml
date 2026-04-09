@@ -88,7 +88,7 @@ jobs:
     with:
       source_branch: ${{ github.event.pull_request.head.ref || github.ref }}
       unit_tests: true
-      unit_test_command: "nix develop -c cargo test --workspace --features all-types,fixed-rng --lib"
+      unit_test_command: "nix build -L .#test"
       unit_coverage: true
       unit_coverage_command: "nix run .#coverage-unit"
       runner: self-hosted-hoprnet-bigger
@@ -130,27 +130,15 @@ jobs:
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   publish-dry-run:
-    name: Publish / ${{ matrix.package }}
+    name: Publish
     needs: [tests]
-    strategy:
-      fail-fast: true
-      max-parallel: 1
-      matrix:
-        package:
-          - hopr-primitive-types
-          - hopr-crypto-random
-          - hopr-crypto-types
-          - hopr-chain-types
-          - hopr-internal-types
-          - hopr-types
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@a8b0ab83aab7876fecccdb4a8f126cb4856a2f0b # publish-crates-v1
+    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@acf901517a3207bb72874997ac060b38c32b21ba # workflow-publish-crates-v1
     permissions:
       contents: read
     with:
       source_branch: ${{ github.event.pull_request.head.ref || github.ref }}
-      package: ${{ matrix.package }}
-      dry_run: true
+      package: hopr-types
+      version_type: commit
       runner: self-hosted-hoprnet-bigger
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      cargo_registry_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
