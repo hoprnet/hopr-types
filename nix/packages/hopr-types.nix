@@ -6,6 +6,7 @@
 {
   builders,
   nixLib,
+  pkgs,
   self,
   lib,
 }:
@@ -26,6 +27,9 @@ let
 
   cargoToml = ../../Cargo.toml;
 
+  allFeatures = "--features all-types,use-bindings,serde";
+  allFeaturesWithFixedRng = "--features all-types,fixed-rng,use-bindings,serde";
+
   buildLib =
     builder: args:
     builder.callPackage nixLib.mkRustLibrary (
@@ -44,13 +48,20 @@ in
 
   clippy = buildLib builders.local {
     runClippy = true;
-    cargoExtraArgs = "--features all-types,use-bindings,serde";
+    cargoExtraArgs = allFeatures;
   };
 
-  test = buildLib builders.local {
-    runTests = true;
-    cargoExtraArgs = "--features all-types,fixed-rng,use-bindings,serde";
-  };
+  test =
+    (buildLib builders.local {
+      runTests = true;
+      cargoExtraArgs = allFeaturesWithFixedRng;
+      extraNativeBuildInputs = [ pkgs.cargo-nextest ];
+    }).overrideAttrs
+      (_: {
+        checkPhase = ''
+          cargo nextest run --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast
+        '';
+      });
 
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib

@@ -79,6 +79,7 @@
             inherit
               builders
               nixLib
+              pkgs
               self
               lib
               ;
