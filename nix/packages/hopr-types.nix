@@ -63,6 +63,21 @@ in
         '';
       });
 
+  coverage-unit =
+    (buildLib builders.localCoverage {
+      runTests = true;
+      cargoExtraArgs = allFeaturesWithFixedRng;
+      extraNativeBuildInputs = [ pkgs.cargo-nextest ];
+    }).overrideAttrs
+      (_: {
+        checkPhase = ''
+          cargo llvm-cov nextest --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast --lcov --output-path $out/coverage.lcov
+        '';
+        installPhase = ''
+          mkdir -p $out
+        '';
+      });
+
   # Cross-compiled rlib packages
   # Artifacts are available at: ./result/lib/libhopr_types.rlib
   lib-hopr-types-x86_64-linux = buildLib builders."x86_64-linux" { };

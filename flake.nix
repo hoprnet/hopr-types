@@ -136,7 +136,6 @@
               ${pre-commit-check.shellHook}
             '';
             extraPackages = with pkgs; [
-              cargo-nextest
               sqlite
               yq-go
             ];
@@ -154,7 +153,6 @@
               rustToolchainFile = ./rust-toolchain.toml;
               shellName = "Coverage";
               withLlvmTools = true;
-              extraPackages = with pkgs; [ cargo-nextest ];
             };
             ci = pkgs.mkShell {
               packages = [ pkgs.zizmor ];
@@ -241,7 +239,9 @@
               type = "app";
               program = toString (
                 pkgs.writeShellScript "coverage-unit" ''
-                  nix develop .#coverage -c cargo llvm-cov nextest --workspace --features all-types,fixed-rng,use-bindings,serde --lib --lcov --output-path coverage.lcov
+                  nix build -L .#coverage-unit
+                  cp result/coverage.lcov coverage.lcov
+                  echo "Coverage report written to coverage.lcov"
                 ''
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
@@ -249,7 +249,7 @@
           };
 
           packages = {
-            inherit (hoprTypesPackages) test lib-hopr-types;
+            inherit (hoprTypesPackages) test coverage-unit lib-hopr-types;
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {
             inherit (hoprTypesPackages) lib-hopr-types-x86_64-linux lib-hopr-types-aarch64-linux;
