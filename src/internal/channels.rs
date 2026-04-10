@@ -15,6 +15,10 @@ use crate::primitive::prelude::*;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[strum_discriminants(vis(pub))]
 #[strum_discriminants(derive(strum::FromRepr, strum::EnumCount), repr(i8))]
+#[cfg_attr(
+    feature = "serde",
+    strum_discriminants(derive(serde::Serialize, serde::Deserialize))
+)]
 #[strum(serialize_all = "PascalCase")]
 pub enum ChannelStatus {
     /// The channel is closed.

@@ -13,6 +13,8 @@
       <sourceFolder url="file://$MODULE_DIR$/parallelize/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/primitive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/random/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
