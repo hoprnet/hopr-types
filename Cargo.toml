@@ -78,8 +78,6 @@ fixed-rng = ["random", "dep:lazy_static"]
 rayon = ["internal", "dep:rayon"]
 use-bindings = ["chain", "dep:hopr-bindings"]
 rust-ecdsa = ["crypto"]
-allocator-mimalloc = ["dep:mimalloc"]
-allocator-jemalloc = ["dep:tikv-jemallocator"]
 
 [dependencies]
 aes = { version = "0.8.4", optional = true }
@@ -143,12 +141,6 @@ tracing = { version = "0.1.44", optional = true, features = [
 ] }
 typenum = { version = "1.19.0", optional = true }
 zeroize = { version = "1.8.2", optional = true, features = ["zeroize_derive"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-mimalloc = { version = "0.1.48", optional = true, default-features = false, features = [
-  "secure",
-] }
-tikv-jemallocator = { version = "0.6.1", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.102"
