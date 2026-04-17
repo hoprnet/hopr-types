@@ -118,6 +118,46 @@ jobs:
           cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build benchmarks
         run: nix build -L .#bench
+  run-benchmarks:
+    name: Run Benchmarks
+    needs: build-benchmarks
+    if: github.event_name == 'pull_request'
+    runs-on: self-hosted-hoprnet-bigger
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: Setup Nix
+        uses: hoprnet/hopr-workflows/actions/setup-nix@43b03a7b5df777770d95c6524f48be34184b26fa # setup-nix-v1
+        with:
+          cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Bencher CLI
+        uses: bencherdev/bencher@0f8f620172ccd6225d40a7590598eb7b41718af8
+      - name: Execute and Upload
+        run: |
+          export BENCHER_API_TOKEN=${BENCHER_API_TOKEN}
+          export BENCHER_PROJECT=hopr-types
+          bencher run \
+            --project hopr-types \
+            --token "${{ secrets.BENCHER_API_TOKEN }}" \
+            --adapter rust_criterion \
+            --branch "$GITHUB_HEAD_REF" \
+            --github-actions "${{ secrets.GITHUB_TOKEN }}" \
+            --err \
+            "nix run .#bench"
+        env:
+          BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   build-library:
     name: Library ${{ matrix.architecture }}
     strategy:

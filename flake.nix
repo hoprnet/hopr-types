@@ -255,8 +255,7 @@
               program = toString (
                 pkgs.writeShellScript "bench" ''
                   set -euo pipefail
-                  nix build -L .#bench
-                  for bin in result/bin/*_bench*; do
+                  for bin in ${hoprTypesPackages.bench}/bin/*_bench*; do
                     $bin --bench
                   done
                 ''
