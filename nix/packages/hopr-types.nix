@@ -89,4 +89,18 @@ in
   lib-hopr-types-aarch64-darwin = buildLib builders."aarch64-darwin" { };
   lib-hopr-types = buildLib builders.local { };
 
+  bench =
+    (buildLib builders.local {
+      cargoExtraArgs = "${allFeatures} --benches";
+    }).overrideAttrs
+      (_: {
+        postBuild = ''
+          cargo bench ${allFeatures} --no-run
+        '';
+        postInstall = ''
+          mkdir -p $out/bin
+          find target -maxdepth 4 -type f -executable -name '*_bench*' -exec cp {} $out/bin/ \;
+        '';
+      });
+
 }
