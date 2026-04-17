@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,6 +39,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      pull-requests: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
@@ -64,22 +66,22 @@ jobs:
             --project hopr-types \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --adapter rust_criterion \
-            --branch "$GITHUB_REF_NAME" \
+            --branch "${{ github.head_ref || github.ref_name }}" \
             --github-actions "${{ secrets.GITHUB_TOKEN }}" \
             --err \
             "nix run .#bench"
         env:
           BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
-      - name: Notify drop in performance
-        uses: zulip/github-actions-zulip/send-message@e4c8f27c732ba9bd98ac6be0583096dea82feea5 # v1.0.2
-        if: failure()
-        with:
-          api-key: ${{ secrets.ZULIP_API_KEY }}
-          email: ${{ secrets.ZULIP_EMAIL }}
-          organization-url: "https://hopr.zulipchat.com"
-          type: "stream"
-          to: "HOPRd"
-          topic: "Benchmark regressions"
-          content: |
-            The benchmark results for branch `${{ github.repository }} ${{ github.ref_name }}` at commit (${{ github.sha }}) have dropped by more than 5%.
-            Please check [Bencher](https://bencher.dev/console/projects/hopr-types) for more details.
+     # - name: Notify drop in performance
+     #   uses: zulip/github-actions-zulip/send-message@e4c8f27c732ba9bd98ac6be0583096dea82feea5 # v1.0.2
+     #   if: failure()
+     #   with:
+     #     api-key: ${{ secrets.ZULIP_API_KEY }}
+     #     email: ${{ secrets.ZULIP_EMAIL }}
+     #     organization-url: "https://hopr.zulipchat.com"
+     #     type: "stream"
+     #     to: "HOPRd"
+     #     topic: "Benchmark regressions"
+     #     content: |
+     #       The benchmark results for branch `${{ github.repository }} ${{ github.ref_name }}` at commit (${{ github.sha }}) have dropped, or failed.
+     #       Please check [Bencher](https://bencher.dev/console/projects/hopr-types) for more details.
