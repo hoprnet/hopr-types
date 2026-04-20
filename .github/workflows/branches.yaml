@@ -75,7 +75,7 @@ jobs:
           set +e
           # Capture stdout and stderr, tee to file
           bencher run \
-            --project hopr-types \
+            --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --adapter rust_criterion \
             --branch "$GITHUB_REF_NAME" \
@@ -85,13 +85,14 @@ jobs:
           set -e
 
           # Extract Bencher Report URL
-          BENCHER_REPORT_URL=$(grep -oE "https://bencher.dev/perf/hopr-types/reports/[^[:space:]]+" bencher_output.txt | head -n 1)
-          echo "bencher_report_url=${BENCHER_REPORT_URL:-https://bencher.dev/console/projects/hopr-types}" >> "$GITHUB_OUTPUT"
+          BENCHER_REPORT_URL=$(grep -oE "https://bencher.dev/perf/${BENCHER_PROJECT}/reports/[^[:space:]]+" bencher_output.txt | head -n 1)
+          echo "bencher_report_url=${BENCHER_REPORT_URL:-https://bencher.dev/console/projects/${BENCHER_PROJECT}}" >> "$GITHUB_OUTPUT"
 
           exit $EXIT_CODE
         env:
           BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BENCHER_PROJECT: ${{ github.event.repository.name }}
       - name: Notify performance drop
         uses: zulip/github-actions-zulip/send-message@e4c8f27c732ba9bd98ac6be0583096dea82feea5 # v1.0.2
         if: failure()
