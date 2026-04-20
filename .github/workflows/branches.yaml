@@ -70,22 +70,25 @@ jobs:
         uses: bencherdev/bencher@0f8f620172ccd6225d40a7590598eb7b41718af8
       - name: Execute and Upload
         id: bencher
+        shell: bash
         run: |
-          set -o pipefail
+          set +e
+          # Capture stdout and stderr, tee to file
           bencher run \
             --project hopr-types \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --adapter rust_criterion \
             --branch "$GITHUB_REF_NAME" \
             --err \
-            "nix run .#bench-run" | tee bencher_output.txt
+            "nix run .#bench-run" 2>&1 | tee bencher_output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
 
-          # Extract Bencher Run URL and failed benchmarks
-          BENCHER_RUN_URL=$(grep -o "https://bencher.dev/console/projects/hopr-types/runs/[0-9a-f-]*" bencher_output.txt | head -n 1)
-          echo "bencher_run_url=${BENCHER_RUN_URL:-https://bencher.dev/console/projects/hopr-types}" >> "$GITHUB_OUTPUT"
+          # Extract Bencher Report URL
+          BENCHER_REPORT_URL=$(grep -oE "https://bencher.dev/perf/hopr-types/reports/[^[:space:]]+" bencher_output.txt | head -n 1)
+          echo "bencher_report_url=${BENCHER_REPORT_URL:-https://bencher.dev/console/projects/hopr-types}" >> "$GITHUB_OUTPUT"
 
-          FAILED_BENCHMARKS=$(grep "THRESHOLD EXCEEDED" bencher_output.txt | cut -d' ' -f1 | tr '\n' ',' | sed 's/,$//')
-          echo "failed_benchmarks=${FAILED_BENCHMARKS:-None detected}" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
         env:
           BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,6 +105,4 @@ jobs:
           content: |
             The benchmark results for branch `${{ github.repository }} ${{ github.ref_name }}` at commit (${{ github.sha }}) have dropped, or failed.
 
-            **Failed/Regressed Benchmarks:** `${{ steps.bencher.outputs.failed_benchmarks }}`
-
-            Please check the specific [Bencher Run](${{ steps.bencher.outputs.bencher_run_url }}) for more details.
+            Please check the specific [Bencher Report](${{ steps.bencher.outputs.bencher_report_url }}) for more details.
