@@ -69,14 +69,23 @@ jobs:
       - name: Install Bencher CLI
         uses: bencherdev/bencher@0f8f620172ccd6225d40a7590598eb7b41718af8
       - name: Execute and Upload
+        id: bencher
         run: |
+          set -o pipefail
           bencher run \
             --project hopr-types \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --adapter rust_criterion \
             --branch "$GITHUB_REF_NAME" \
             --err \
-            "nix run .#bench-run"
+            "nix run .#bench-run" | tee bencher_output.txt
+
+          # Extract Bencher Run URL and failed benchmarks
+          BENCHER_RUN_URL=$(grep -o "https://bencher.dev/console/projects/hopr-types/runs/[0-9a-f-]*" bencher_output.txt | head -n 1)
+          echo "bencher_run_url=${BENCHER_RUN_URL:-https://bencher.dev/console/projects/hopr-types}" >> "$GITHUB_OUTPUT"
+
+          FAILED_BENCHMARKS=$(grep "THRESHOLD EXCEEDED" bencher_output.txt | cut -d' ' -f1 | tr '\n' ',' | sed 's/,$//')
+          echo "failed_benchmarks=${FAILED_BENCHMARKS:-None detected}" >> "$GITHUB_OUTPUT"
         env:
           BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -92,4 +101,7 @@ jobs:
           topic: "Benchmark regressions"
           content: |
             The benchmark results for branch `${{ github.repository }} ${{ github.ref_name }}` at commit (${{ github.sha }}) have dropped, or failed.
-            Please check [Bencher](https://bencher.dev/console/projects/hopr-types) for more details.
+
+            **Failed/Regressed Benchmarks:** `${{ steps.bencher.outputs.failed_benchmarks }}`
+
+            Please check the specific [Bencher Run](${{ steps.bencher.outputs.bencher_run_url }}) for more details.
