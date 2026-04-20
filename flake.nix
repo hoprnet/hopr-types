@@ -250,12 +250,13 @@
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
             };
-            bench = {
+            bench-run = {
               type = "app";
               program = toString (
-                pkgs.writeShellScript "bench" ''
+                pkgs.writeShellScript "bench-run" ''
                   set -euo pipefail
-                  for bin in ${hoprTypesPackages.bench}/bin/*_bench*; do
+                  nix build -L .#bench-build
+                  for bin in result/bin/*_bench*; do
                     $bin --bench
                   done
                 ''
@@ -269,7 +270,7 @@
               test
               coverage-unit
               lib-hopr-types
-              bench
+              bench-build
               ;
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {

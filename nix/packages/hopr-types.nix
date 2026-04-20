@@ -89,7 +89,7 @@ in
   lib-hopr-types-aarch64-darwin = buildLib builders."aarch64-darwin" { };
   lib-hopr-types = buildLib builders.local { };
 
-  bench =
+  bench-build =
     (buildLib builders.local {
       cargoExtraArgs = "${allFeatures} --benches";
     }).overrideAttrs

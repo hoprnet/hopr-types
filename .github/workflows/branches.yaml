@@ -25,6 +25,7 @@ jobs:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
   build-benchmarks:
     name: Build Benchmarks
+    needs: coverage
     runs-on: self-hosted-hoprnet-bigger
     permissions:
       contents: read
@@ -43,7 +44,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Build benchmarks
-        run: nix build -L .#bench
+        run: nix build -L .#bench-build
   run-benchmarks:
     name: Run Benchmarks
     needs: build-benchmarks
@@ -75,7 +76,7 @@ jobs:
             --adapter rust_criterion \
             --branch "$GITHUB_REF_NAME" \
             --err \
-            "nix run .#bench"
+            "nix run .#bench-run"
         env:
           BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
