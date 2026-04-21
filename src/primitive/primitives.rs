@@ -17,7 +17,7 @@ use crate::primitive::{
     traits::{IntoEndian, ToHex, UnitaryFloatOps},
 };
 
-/// 256-bit unsigned integer type, re-exported from [`primitive_types`].
+/// 256-bit unsigned integer type alias for [`primitive_types::U256`].
 pub type U256 = primitive_types::U256;
 
 /// Represents an Ethereum address
