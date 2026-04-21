@@ -44,8 +44,12 @@ pub struct WinningProbability(
 impl WinningProbability {
     /// 100% winning probability
     pub const ALWAYS: Self = Self([0xff; ENCODED_WIN_PROB_LENGTH]);
-    /// Tolerance threshold for floating-point probability comparisons.
-    /// Differences smaller than this are treated as equal to 0% or 100%.
+    /// Tolerance threshold for approximate floating-point probability comparisons.
+    ///
+    /// Two probabilities whose absolute difference is below this value are treated
+    /// as equal by [`Self::approx_cmp`]/[`Self::approx_eq`], and values within
+    /// this tolerance of `0.0` or `1.0` are snapped to [`Self::NEVER`] / [`Self::ALWAYS`]
+    /// by [`Self::try_from_f64`].
     pub const EPSILON: f64 = 0.00000001;
     /// 0% winning probability.
     pub const NEVER: Self = Self([0u8; ENCODED_WIN_PROB_LENGTH]);

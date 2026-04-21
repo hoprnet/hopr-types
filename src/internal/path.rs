@@ -155,7 +155,7 @@ impl ChainPath {
         Self(vec![destination])
     }
 
-    /// Converts this chain path into the [`ChainPath`] by removing the destination.
+    /// Converts this chain path into a [`ChannelPath`] by removing the destination.
     pub fn into_channel_path(mut self) -> ChannelPath {
         self.0.pop();
         self.0
