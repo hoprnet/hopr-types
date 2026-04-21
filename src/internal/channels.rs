@@ -94,7 +94,7 @@ pub enum ChannelDirection {
     Outgoing = 1,
 }
 
-/// Alias for the [`Hash`](struct@Hash) representing a channel ID.
+/// Alias for the [`Hash`](tyalias@Hash) representing a channel ID.
 pub type ChannelId = Hash;
 
 /// An immutable pair of addresses representing parties of a channel.

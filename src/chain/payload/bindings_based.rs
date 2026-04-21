@@ -3,6 +3,7 @@ use std::str::FromStr;
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
 use crate::primitive::prelude::*;
+/// Re-export of the Alloy [`TransactionRequest`] type for constructing on-chain transactions.
 pub use hopr_bindings::exports::alloy::rpc::types::TransactionRequest;
 use hopr_bindings::{
     exports::alloy::{
@@ -158,6 +159,7 @@ pub struct BasicPayloadGenerator {
 }
 
 impl BasicPayloadGenerator {
+    /// Creates a new [`BasicPayloadGenerator`] for the given node address and contract addresses.
     pub fn new(me: Address, contract_addrs: ContractAddresses) -> Self {
         Self { me, contract_addrs }
     }
@@ -389,6 +391,8 @@ pub struct SafePayloadGenerator {
 }
 
 impl SafePayloadGenerator {
+    /// Creates a new [`SafePayloadGenerator`] using the given chain keypair,
+    /// contract addresses, and Safe module address.
     pub fn new(
         chain_keypair: &ChainKeypair,
         contract_addrs: ContractAddresses,

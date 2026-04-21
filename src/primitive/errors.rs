@@ -17,4 +17,5 @@ pub enum GeneralError {
     NonSpecificError(String),
 }
 
+/// Convenience type alias for `Result` with [`GeneralError`] as the error type.
 pub type Result<T> = core::result::Result<T, GeneralError>;

@@ -230,6 +230,10 @@ impl Default for HalfKeyChallenge {
 }
 
 impl HalfKeyChallenge {
+    /// Creates a new [`HalfKeyChallenge`] from the given byte slice.
+    ///
+    /// # Panics
+    /// Panics if `half_key_challenge` length is not equal to [`HalfKeyChallenge::SIZE`].
     pub fn new(half_key_challenge: &[u8]) -> Self {
         let mut ret = Self::default();
         ret.0.copy_from_slice(half_key_challenge);
@@ -598,6 +602,7 @@ impl PublicKey {
     pub const SIZE_COMPRESSED: usize = 33;
     /// Size of the uncompressed public key in bytes
     pub const SIZE_UNCOMPRESSED: usize = 65;
+    /// Size of the uncompressed public key without the `0x04` SEC1 prefix byte (64 bytes).
     pub const SIZE_UNCOMPRESSED_PLAIN: usize = 64;
 
     /// Computes the public key from the given `private_key`.

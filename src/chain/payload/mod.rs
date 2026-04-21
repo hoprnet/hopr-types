@@ -1,12 +1,12 @@
 //! Module defining various Ethereum transaction payload generators for the actions.
 //!
-//! This module defines the basic [`PayloadGenerator`] trait that describes how an action
-//! is translated into a [`TransactionRequest`] that can be submitted on-chain.
+//! This module defines the basic `PayloadGenerator` trait that describes how an action
+//! is translated into a `TransactionRequest` that can be submitted on-chain.
 //!
 //! There are two main implementations:
-//! - [`BasicPayloadGenerator`] which implements generation of a direct EIP1559 transaction payload. This is currently
+//! - `BasicPayloadGenerator` which implements generation of a direct EIP1559 transaction payload. This is currently
 //!   not used by a HOPR node.
-//! - [`SafePayloadGenerator`] which implements generation of a payload that embeds the transaction data into the SAFE
+//! - `SafePayloadGenerator` which implements generation of a payload that embeds the transaction data into the SAFE
 //!   transaction. This is currently the main mode of HOPR node operation.
 //!
 //! These are currently based on the `hopr-bindings` crate.

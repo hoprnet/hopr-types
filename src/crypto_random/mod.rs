@@ -5,6 +5,7 @@
 //! exclusively rely on randomness functions only from this crate.
 
 use generic_array::{ArrayLength, GenericArray};
+/// Re-export of the [`Rng`] trait for generic random value generation.
 pub use rand::Rng;
 use rand::{CryptoRng, RngExt};
 

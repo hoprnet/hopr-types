@@ -1,9 +1,12 @@
 //! This module contains various on-chain related modules and types.
 
+/// Types representing events emitted by HOPR smart contracts.
 pub mod chain_events;
+/// Error types for chain-related operations.
 pub mod errors;
 #[cfg(feature = "use-bindings")]
 mod parser;
+/// Ethereum transaction payload generators for on-chain actions.
 pub mod payload;
 
 #[cfg(feature = "use-bindings")]

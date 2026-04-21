@@ -45,6 +45,7 @@ jobs:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   notify:
     name: Notify failure
+    permissions: {}
     needs:
       - build-library
       - publish-dry-run

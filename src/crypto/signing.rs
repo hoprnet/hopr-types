@@ -122,7 +122,8 @@ impl EcdsaEngine for NativeEcdsaSigningEngine {
 }
 
 /// Represents an ECDSA signature based on the secp256k1 curve with a recoverable public key.
-/// The signature uses [Keccak256](Hash) as the hash function.
+/// When signing messages, Keccak256 is used as the hash function;
+/// `sign_hash` operates on an arbitrary pre-computed hash.
 ///
 /// This signature encodes the 2-bit recovery information into the
 /// uppermost bits from MSB of the `S` value, which are never used by this ECDSA
@@ -237,9 +238,13 @@ impl<E> BytesRepresentable for ChainSignature<E> {
     const SIZE: usize = ECDSA_SIGNATURE_SIZE;
 }
 
+/// Default ECDSA signature type using the native secp256k1 signing engine.
 #[cfg(not(feature = "rust-ecdsa"))]
 pub type Signature = ChainSignature<NativeEcdsaSigningEngine>;
 
+/// ECDSA signature type using the pure-Rust k256 signing engine.
+///
+/// Active when the `rust-ecdsa` feature is enabled.
 #[cfg(feature = "rust-ecdsa")]
 pub type Signature = ChainSignature<K256EcdsaSigningEngine>;
 

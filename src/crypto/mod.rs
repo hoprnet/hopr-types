@@ -15,8 +15,8 @@ pub mod primitives;
 pub mod seal;
 /// Separate module for signature algorithms.
 pub mod signing;
-/// Implements basic cryptography-related types based on [primitives], such as [Hash](types::Hash),
-/// [PublicKey](types::PublicKey) and [Signature](types::Signature).
+/// Implements basic cryptography-related types based on [primitives], such as [Hash](types::Hash)
+/// and [PublicKey](types::PublicKey).
 pub mod types;
 /// Contains small utility functions used in the other crypto modules
 pub mod utils;

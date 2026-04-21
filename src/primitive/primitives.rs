@@ -17,6 +17,7 @@ use crate::primitive::{
     traits::{IntoEndian, ToHex, UnitaryFloatOps},
 };
 
+/// 256-bit unsigned integer type alias for [`primitive_types::U256`].
 pub type U256 = primitive_types::U256;
 
 /// Represents an Ethereum address
@@ -38,6 +39,10 @@ impl Display for Address {
 }
 
 impl Address {
+    /// Creates a new [`Address`] from the given byte slice.
+    ///
+    /// # Panics
+    /// Panics if `bytes` length is not equal to [`Address::SIZE`] (20 bytes).
     pub fn new(bytes: &[u8]) -> Self {
         assert_eq!(bytes.len(), Self::SIZE, "invalid length");
         let mut ret = Self::default();
@@ -45,6 +50,8 @@ impl Address {
         ret
     }
 
+    /// Converts this 20-byte address into a 32-byte ABI-encoded representation
+    /// by left-padding with 12 zero bytes.
     pub fn to_bytes32(&self) -> Box<[u8]> {
         let mut ret = Vec::with_capacity(12 + Self::SIZE);
         ret.extend_from_slice(&[0u8; 12]);

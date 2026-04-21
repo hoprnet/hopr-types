@@ -355,10 +355,13 @@ impl<C: Currency> UnitaryFloatOps for Balance<C> {
     }
 }
 
+/// Balance denominated in wxHOPR (wrapped xHOPR) tokens.
 pub type HoprBalance = Balance<WxHOPR>;
 
+/// Balance denominated in xHOPR tokens.
 pub type XHoprBalance = Balance<XHOPR>;
 
+/// Balance denominated in xDai (native gas token).
 pub type XDaiBalance = Balance<XDai>;
 
 #[cfg(test)]

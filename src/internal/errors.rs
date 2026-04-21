@@ -70,4 +70,5 @@ pub enum PathError {
     OtherError(#[from] GeneralError),
 }
 
+/// Convenience type alias for `Result` with [`CoreTypesError`] as the error type.
 pub type Result<T> = core::result::Result<T, CoreTypesError>;

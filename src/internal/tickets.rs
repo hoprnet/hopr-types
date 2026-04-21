@@ -24,7 +24,6 @@ const ENCODED_WIN_PROB_LENGTH: usize = 7;
 /// Define the selector for the redeemTicketCall to avoid importing
 /// the entire hopr-bindings crate for one single constant.
 /// This value should be updated with the function interface changes.
-// pub const REDEEM_CALL_SELECTOR: [u8; 4] = [252, 183, 121, 111];
 pub const REDEEM_CALL_SELECTOR: [u8; 4] = [101, 227, 250, 114];
 
 /// Winning probability encoded in 7-byte representation
@@ -45,8 +44,12 @@ pub struct WinningProbability(
 impl WinningProbability {
     /// 100% winning probability
     pub const ALWAYS: Self = Self([0xff; ENCODED_WIN_PROB_LENGTH]);
-    // This value can no longer be represented with the winning probability encoding
-    // and is equal to 0
+    /// Tolerance threshold for approximate floating-point probability comparisons.
+    ///
+    /// Two probabilities whose absolute difference is below this value are treated
+    /// as equal by [`Self::approx_cmp`]/[`Self::approx_eq`], and values within
+    /// this tolerance of `0.0` or `1.0` are snapped to [`Self::NEVER`] / [`Self::ALWAYS`]
+    /// by [`Self::try_from_f64`].
     pub const EPSILON: f64 = 0.00000001;
     /// 0% winning probability.
     pub const NEVER: Self = Self([0u8; ENCODED_WIN_PROB_LENGTH]);
@@ -803,7 +806,7 @@ const ON_CHAIN_TICKET_SIZE: usize = 60 + EthereumChallenge::SIZE + Signature::SI
 impl BytesEncodable<TICKET_SIZE> for Ticket {}
 
 /// Holds a ticket that has been already verified.
-/// This structure guarantees that [`Ticket::get_hash()`] of [`VerifiedTicket::verified_ticket()`]
+/// This structure guarantees that `Ticket::get_hash()` of [`VerifiedTicket::verified_ticket()`]
 /// is always equal to [`VerifiedTicket::verified_hash`]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -870,7 +873,7 @@ impl VerifiedTicket {
     }
 
     /// Fixed ticket hash that is guaranteed to be equal to
-    /// [`Ticket::get_hash`] of [`VerifiedTicket::verified_ticket`].
+    /// `Ticket::get_hash` of [`VerifiedTicket::verified_ticket`].
     #[inline]
     pub fn verified_hash(&self) -> &Hash {
         &self.hash

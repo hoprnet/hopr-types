@@ -1,6 +1,5 @@
 //! Contains all HOPR-specific or related Rust types.
-//!
-//! The individual types are feature-gated.
+#![doc = include_str!("../README.md")]
 
 /// Basic public types used in the HOPR protocol.
 #[cfg(feature = "primitive")]
