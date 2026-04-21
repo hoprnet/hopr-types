@@ -30,7 +30,9 @@ pub mod crypto_traits {
         Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit, KeySizeUser, StreamCipher,
         StreamCipherSeek,
     };
-    pub use digest::{Digest, FixedOutput, FixedOutputReset, Output, OutputSizeUser, Update};
+    pub use digest::{
+        Digest, FixedOutput, FixedOutputReset, HashMarker, Output, OutputSizeUser, Update,
+    };
     pub use poly1305::universal_hash::UniversalHash;
 
     /// Pseudo-random permutation (PRP)
