@@ -196,12 +196,14 @@ impl std::fmt::Debug for HoprSenderId {
 }
 
 impl HoprSenderId {
+    /// Creates a new [`HoprSenderId`] with the given pseudonym and a random SURB ID.
     pub fn new(pseudonym: &HoprPseudonym) -> Self {
         let mut ret: [u8; Self::SIZE] = crate::crypto_random::random_bytes();
         ret[..HoprPseudonym::SIZE].copy_from_slice(pseudonym.as_ref());
         Self(ret)
     }
 
+    /// Creates a [`HoprSenderId`] from an explicit pseudonym and SURB ID.
     pub fn from_pseudonym_and_id(pseudonym: &HoprPseudonym, id: HoprSurbId) -> Self {
         let mut ret = [0u8; Self::SIZE];
         ret[..HoprPseudonym::SIZE].copy_from_slice(pseudonym.as_ref());
@@ -209,10 +211,12 @@ impl HoprSenderId {
         Self(ret)
     }
 
+    /// Returns the [`HoprPseudonym`] part of this sender ID.
     pub fn pseudonym(&self) -> HoprPseudonym {
         HoprPseudonym::try_from(&self.0[..HoprPseudonym::SIZE]).expect("must have valid pseudonym")
     }
 
+    /// Returns the [`HoprSurbId`] part of this sender ID.
     pub fn surb_id(&self) -> HoprSurbId {
         self.0[HoprPseudonym::SIZE..HoprPseudonym::SIZE + SURB_ID_SIZE]
             .try_into()

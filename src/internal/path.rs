@@ -63,6 +63,7 @@ impl<T: Into<PathAddress> + Copy + PartialEq + Eq> Path<T> for Vec<T> {
     }
 }
 
+/// A path of [`Address`]es representing intermediate hops in a payment channel route.
 pub type ChannelPath = Vec<Address>;
 
 /// A [`NonEmptyPath`] that can be used to route packets using [`OffchainPublicKey`].

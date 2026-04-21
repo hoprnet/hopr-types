@@ -9,6 +9,9 @@ license = "GPL-3.0-only"
 edition = "2024"
 rust-version = "1.93"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [package.metadata.crane]
 name = "hopr-types"
 

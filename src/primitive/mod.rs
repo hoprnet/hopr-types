@@ -41,6 +41,7 @@ pub fn to_hex_shortened<const M: usize>(data: &impl AsRef<[u8]>) -> String {
     }
 }
 
+/// Re-exports of the most commonly used primitive types and traits.
 pub mod prelude {
     pub use chrono::{DateTime, Utc};
 

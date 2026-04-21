@@ -2,6 +2,7 @@ use crate::primitive::errors::GeneralError;
 use k256::elliptic_curve;
 use thiserror::Error;
 
+/// Enumeration of all cryptography-related errors in this crate.
 #[derive(Error, Debug, PartialEq)]
 pub enum CryptoError {
     #[error("cryptographic parameter '{name}' must be {expected} bytes long")]
@@ -13,7 +14,7 @@ pub enum CryptoError {
     #[error("secret scalar results in an invalid EC point")]
     InvalidSecretScalar,
 
-    #[error("ec point represents and invalid public key")]
+    #[error("ec point represents an invalid public key")]
     InvalidPublicKey,
 
     #[error("mac or authentication tag did not match")]
@@ -41,4 +42,5 @@ pub enum CryptoError {
     Other(#[from] GeneralError),
 }
 
+/// Convenience type alias for `Result` with [`CryptoError`] as the error type.
 pub type Result<T> = core::result::Result<T, CryptoError>;

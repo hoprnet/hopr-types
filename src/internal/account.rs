@@ -59,6 +59,8 @@ impl AccountEntry {
         }
     }
 
+    /// Returns the multiaddresses of this account entry, or an empty slice
+    /// if the node is not announced.
     pub fn get_multiaddrs(&self) -> &[Multiaddr] {
         match &self.entry_type {
             AccountType::NotAnnounced => &[],
