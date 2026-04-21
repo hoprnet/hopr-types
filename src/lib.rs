@@ -1,3 +1,4 @@
+//! Contains all HOPR-specific or related Rust types.
 #![doc = include_str!("../README.md")]
 
 /// Basic public types used in the HOPR protocol.
