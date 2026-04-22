@@ -250,10 +250,28 @@
               );
               meta.description = "Generate unit test coverage report (coverage.lcov)";
             };
+            bench-run = {
+              type = "app";
+              program = toString (
+                pkgs.writeShellScript "bench-run" ''
+                  set -euo pipefail
+                  nix build -L .#bench-build
+                  for bin in result/bin/*_bench*; do
+                    $bin --bench
+                  done
+                ''
+              );
+              meta.description = "Run all benchmarks";
+            };
           };
 
           packages = {
-            inherit (hoprTypesPackages) test coverage-unit lib-hopr-types;
+            inherit (hoprTypesPackages)
+              test
+              coverage-unit
+              lib-hopr-types
+              bench-build
+              ;
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {
             inherit (hoprTypesPackages) lib-hopr-types-x86_64-linux lib-hopr-types-aarch64-linux;
