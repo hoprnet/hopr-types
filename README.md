@@ -7,6 +7,7 @@
 [![MSRV](https://img.shields.io/crates/msrv/hopr-types)](https://github.com/hoprnet/hopr-types)
 [![Crates.io Downloads](https://img.shields.io/crates/d/hopr-types)](https://crates.io/crates/hopr-types)
 [![codecov](https://codecov.io/gh/hoprnet/hopr-types/branch/main/graph/badge.svg)](https://codecov.io/gh/hoprnet/hopr-types)
+[![Bencher](https://img.shields.io/badge/Performance-Bencher-6366f1?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyIDJMMiA3djEwbDEwIDUgMTAtNVY3bC0xMC01ek00IDguOTVsOC00IDggNGwtOCA0LTgtNHptOCAxMC4xNWwtNi0zVjEwbDYgM3Y2LjE1em04LTMuMTVsbC02IDNWMTBsNi0zdjYuMTV6Ii8+PC9zdmc+)](https://bencher.dev/console/projects/hopr-types/perf)
 
 A collection of Rust types used within the HOPR network and related projects.
 
