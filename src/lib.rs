@@ -20,3 +20,11 @@ pub mod internal;
 /// Blockchain-related types.
 #[cfg(feature = "chain")]
 pub mod chain;
+
+/// Key pair management and Ethereum keystore support.
+#[cfg(feature = "keypair")]
+pub mod keypair;
+
+/// OpenTelemetry-backed metrics collection.
+#[cfg(feature = "telemetry")]
+pub mod telemetry;
