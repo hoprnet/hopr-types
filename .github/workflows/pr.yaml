@@ -95,28 +95,6 @@ jobs:
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  benchmarks:
-    name: Benchmarks
-    needs: [checks, tests, build-library, publish-dry-run]
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
-    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
-    with:
-      source_branch: ${{ github.event.pull_request.head.ref }}
-      runner: depot-ubuntu-24.04-4
-      bencher_project: ${{ github.event.repository.name }}
-      should_build: true
-      should_run: true
-      build_command: "nix build -L .#bench-build"
-      run_command: "nix run .#bench-run"
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      bencher_api_token: ${{ secrets.BENCHER_API_TOKEN }}
-      ZULIP_API_KEY: ${{ secrets.ZULIP_API_KEY }}
-      ZULIP_EMAIL: ${{ secrets.ZULIP_EMAIL }}
   build-library:
     name: Library ${{ matrix.architecture }}
     strategy:
@@ -144,3 +122,25 @@ jobs:
       enabled: ${{ matrix.required_label == '' || contains(github.event.pull_request.labels.*.name, matrix.required_label) }}
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  benchmarks:
+    name: Benchmarks
+    needs: [checks, tests, build-library]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
+    with:
+      source_branch: ${{ github.event.pull_request.head.ref }}
+      runner: depot-ubuntu-24.04-4
+      bencher_project: ${{ github.event.repository.name }}
+      should_build: true
+      should_run: true
+      build_command: "nix build -L .#bench-build"
+      run_command: "nix run .#bench-run"
+    secrets:
+      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      bencher_api_token: ${{ secrets.BENCHER_API_TOKEN }}
+      ZULIP_API_KEY: ${{ secrets.ZULIP_API_KEY }}
+      ZULIP_EMAIL: ${{ secrets.ZULIP_EMAIL }}
