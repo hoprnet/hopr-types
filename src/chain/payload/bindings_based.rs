@@ -10,7 +10,7 @@ use hopr_bindings::{
         self,
         consensus::TxEnvelope,
         eips::Encodable2718,
-        network::{EthereumWallet, TransactionBuilder},
+        network::{EthereumWallet, NetworkTransactionBuilder, TransactionBuilder},
         primitives::{
             B256, U256,
             aliases::{U24, U48, U56, U96},
