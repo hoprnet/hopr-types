@@ -39,7 +39,7 @@ jobs:
     needs:
       - build-library
     if: ${{ always() && github.event.pull_request.merged == true && !success() }}
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - name: Notify failed merge pipeline
         uses: zulip/github-actions-zulip/send-message@e4c8f27c732ba9bd98ac6be0583096dea82feea5 # v1.0.2

@@ -34,7 +34,7 @@ jobs:
     name: Close release
     needs:
       - build-library
-    runs-on: self-hosted-hoprnet-small
+    runs-on: depot-ubuntu-24.04
     permissions:
       contents: write
     steps:

@@ -19,7 +19,7 @@ jobs:
       unit_coverage: true
       unconditional: true
       unit_coverage_command: "nix run .#coverage-unit"
-      runner: self-hosted-hoprnet-bigger
+      runner: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -33,7 +33,7 @@ jobs:
     uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
     with:
       source_branch: ${{ github.ref_name }}
-      runner: self-hosted-hoprnet-bigger
+      runner: depot-ubuntu-24.04-4
       bencher_project: ${{ github.event.repository.name }}
       should_build: true
       should_run: true
