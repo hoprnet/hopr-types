@@ -124,43 +124,23 @@ jobs:
       matrix:
         include:
           - architecture: x86_64-linux
-            runner: self-hosted-hoprnet-bigger
-            build_command: nix build -L .#lib-hopr-types-x86_64-linux
+            runner: depot-ubuntu-24.04-4
             required_label: ""
           - architecture: aarch64-linux
-            runner: self-hosted-hoprnet-bigger
-            build_command: nix build -L .#lib-hopr-types-aarch64-linux
+            runner: depot-ubuntu-24.04-arm-4
             required_label: "binary:aarch64-linux"
-          - architecture: x86_64-darwin
-            runner: macos-15-intel
-            build_command: nix build -L .#lib-hopr-types-x86_64-darwin
-            required_label: binary:x86_64-darwin
           - architecture: aarch64-darwin
-            runner: macos-15-xlarge
-            build_command: nix build -L .#lib-hopr-types-aarch64-darwin
-            required_label: binary:aarch64-darwin
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@build-library-v1
+            runner: depot-macos-15
+            required_label: "binary:aarch64-darwin"
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@build-library-v2
     permissions:
       contents: read
     with:
       source_branch: ${{ github.event.pull_request.head.ref || github.ref }}
-      architecture: ${{ matrix.architecture }}
-      build_command: ${{ matrix.build_command }}
-      runner: ${{ matrix.runner }}
-      timeout_minutes: 120
-      enabled: ${{ matrix.required_label == '' || contains(github.event.pull_request.labels.*.name, matrix.required_label) }}
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-  publish-dry-run:
-    name: Publish
-    needs: [tests]
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@e4fadaa70234b9d734d5c51b6900602e55492ce2 # workflow-publish-crates-v3
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.head.ref || github.ref }}
-      package: hopr-types
       version_type: commit
-      runner: self-hosted-hoprnet-bigger
+      architecture: ${{ matrix.architecture }}
+      package_name: hopr-types
+      runner: ${{ matrix.runner }}
+      enabled: ${{ matrix.required_label == '' || contains(github.event.pull_request.labels.*.name, matrix.required_label) }}
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
