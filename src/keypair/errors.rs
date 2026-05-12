@@ -1,5 +1,5 @@
-use hex::FromHexError;
 use crate::crypto::errors::CryptoError;
+use hex::FromHexError;
 use serde_json::Error as JsonError;
 use thiserror::Error;
 

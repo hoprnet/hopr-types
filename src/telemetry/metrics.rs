@@ -50,7 +50,9 @@ fn global_state() -> &'static GlobalMetricState {
             .without_target_info()
             .without_scope_info()
             .build();
-        let provider = SdkMeterProvider::builder().with_reader(exporter.clone()).build();
+        let provider = SdkMeterProvider::builder()
+            .with_reader(exporter.clone())
+            .build();
         GlobalMetricState {
             exporter,
             provider,
@@ -95,7 +97,10 @@ pub fn register_prefix_provider(prefix: &str, provider: SdkMeterProvider) -> boo
         .write()
         .expect("prefix provider lock must not be poisoned");
 
-    if let Some(existing) = prefix_providers.iter_mut().find(|entry| entry.prefix == prefix) {
+    if let Some(existing) = prefix_providers
+        .iter_mut()
+        .find(|entry| entry.prefix == prefix)
+    {
         existing.provider = provider;
         return true;
     }
@@ -178,7 +183,12 @@ impl AtomicF64 {
             let new_f64 = current_f64 + delta;
             if self
                 .0
-                .compare_exchange_weak(current, new_f64.to_bits(), Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(
+                    current,
+                    new_f64.to_bits(),
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
                 .is_ok()
             {
                 return new_f64;
@@ -249,7 +259,9 @@ impl MultiCounter {
     /// Creates a new vector of integer counters with given name, description and counter labels.
     pub fn new(name: &str, description: &str, labels: &[&str]) -> MetricResult<Self> {
         if labels.is_empty() {
-            return Err(MetricError("at least a single label must be specified".into()));
+            return Err(MetricError(
+                "at least a single label must be specified".into(),
+            ));
         }
         let ctr = meter_for_metric(name)
             .u64_counter(name.to_string())
@@ -354,7 +366,9 @@ impl MultiGauge {
     /// Creates a new vector of gauges with given name, description and counter labels.
     pub fn new(name: &str, description: &str, labels: &[&str]) -> MetricResult<Self> {
         if labels.is_empty() {
-            return Err(MetricError("at least a single label must be specified".into()));
+            return Err(MetricError(
+                "at least a single label must be specified".into(),
+            ));
         }
         let gauge = meter_for_metric(name)
             .f64_up_down_counter(name.to_string())
@@ -380,7 +394,9 @@ impl MultiGauge {
             }
         }
         let mut write = self.shadow.write().unwrap();
-        write.entry(key.to_vec()).or_insert_with(|| AtomicF64::new(0.0));
+        write
+            .entry(key.to_vec())
+            .or_insert_with(|| AtomicF64::new(0.0));
     }
 
     /// Increments gauge with given labels by the given number.
@@ -530,9 +546,16 @@ impl MultiHistogram {
     /// Creates a new histogram with the given name, description, buckets and labels.
     /// If no buckets are specified, they will be defined automatically.
     /// The +Inf bucket is always added automatically.
-    pub fn new(name: &str, description: &str, buckets: Vec<f64>, labels: &[&str]) -> MetricResult<Self> {
+    pub fn new(
+        name: &str,
+        description: &str,
+        buckets: Vec<f64>,
+        labels: &[&str],
+    ) -> MetricResult<Self> {
         if labels.is_empty() {
-            return Err(MetricError("at least a single label must be specified".into()));
+            return Err(MetricError(
+                "at least a single label must be specified".into(),
+            ));
         }
         let hh = meter_for_metric(name)
             .f64_histogram(name.to_string())
@@ -684,7 +707,11 @@ mod tests {
 
     #[test]
     fn simple_histogram() -> anyhow::Result<()> {
-        let histogram = SimpleHistogram::new("otel_my_histogram", "test histogram", vec![1.0, 2.0, 3.0, 4.0, 5.0])?;
+        let histogram = SimpleHistogram::new(
+            "otel_my_histogram",
+            "test histogram",
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+        )?;
 
         assert_eq!("otel_my_histogram", histogram.name());
 

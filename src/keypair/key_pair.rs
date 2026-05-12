@@ -1,9 +1,4 @@
-use std::{
-    fmt::Debug,
-    fs,
-    path::Path,
-    str::FromStr,
-};
+use std::{fmt::Debug, fs, path::Path, str::FromStr};
 
 use crate::{
     crypto::{
@@ -136,7 +131,9 @@ impl FromStr for HoprKeys {
 impl TryFrom<[u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH]> for HoprKeys {
     type Error = KeyPairError;
 
-    fn try_from(value: [u8; CHAIN_KEY_LENGTH + PACKET_KEY_LENGTH]) -> std::result::Result<Self, Self::Error> {
+    fn try_from(
+        value: [u8; CHAIN_KEY_LENGTH + PACKET_KEY_LENGTH],
+    ) -> std::result::Result<Self, Self::Error> {
         let mut packet_key = [0u8; PACKET_KEY_LENGTH];
         packet_key.copy_from_slice(&value[0..32]);
         let mut chain_key = [0u8; CHAIN_KEY_LENGTH];
@@ -149,7 +146,9 @@ impl TryFrom<[u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH]> for HoprKeys {
 impl TryFrom<([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH])> for HoprKeys {
     type Error = KeyPairError;
 
-    fn try_from(value: ([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH])) -> std::result::Result<Self, Self::Error> {
+    fn try_from(
+        value: ([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH]),
+    ) -> std::result::Result<Self, Self::Error> {
         Ok(HoprKeys {
             packet_key: OffchainKeypair::from_secret(&value.0)?,
             chain_key: ChainKeypair::from_secret(&value.1)?,
@@ -160,7 +159,8 @@ impl TryFrom<([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH])> for HoprKeys {
 
 impl PartialEq for HoprKeys {
     fn eq(&self, other: &Self) -> bool {
-        self.packet_key.public().eq(other.packet_key.public()) && self.chain_key.public().eq(other.chain_key.public())
+        self.packet_key.public().eq(other.packet_key.public())
+            && self.chain_key.public().eq(other.chain_key.public())
     }
 }
 
@@ -211,7 +211,11 @@ impl HoprKeys {
                 private_key.parse()
             }
             #[cfg(any(feature = "keypair-to-file", test))]
-            IdentityRetrievalModes::FromIdIntoFile { id, password, id_path } => {
+            IdentityRetrievalModes::FromIdIntoFile {
+                id,
+                password,
+                id_path,
+            } => {
                 let identity_file_exists = fs::metadata(id_path).is_ok();
 
                 if identity_file_exists {
@@ -240,7 +244,13 @@ impl HoprKeys {
         let keystore: EthKeystore = from_json_string(&json_string)?;
 
         let key = match keystore.crypto.kdfparams {
-            KdfparamsType::Scrypt { dklen, n, p, r, salt } => {
+            KdfparamsType::Scrypt {
+                dklen,
+                n,
+                p,
+                r,
+                salt,
+            } => {
                 let mut key = vec![0u8; dklen as usize];
                 let log_n = (n as f32).log2() as u8;
                 let scrypt_params = ScryptParams::new_with_output_len(log_n, r, p, dklen.into())
@@ -261,8 +271,9 @@ impl HoprKeys {
             return Err(KeyPairError::MacMismatch);
         }
 
-        let mut decryptor = Aes128Ctr::new_from_slices(&key[..16], &keystore.crypto.cipherparams.iv[..16])
-            .map_err(|_| KeyPairError::KeyDerivationError("invalid key or iv length".into()))?;
+        let mut decryptor =
+            Aes128Ctr::new_from_slices(&key[..16], &keystore.crypto.cipherparams.iv[..16])
+                .map_err(|_| KeyPairError::KeyDerivationError("invalid key or iv length".into()))?;
 
         let mut pk = keystore.crypto.ciphertext;
 
@@ -275,9 +286,9 @@ impl HoprKeys {
                 let mut chain_key = [0u8; CHAIN_KEY_LENGTH];
                 chain_key.clone_from_slice(&pk.as_slice()[0..CHAIN_KEY_LENGTH]);
 
-                let ret: HoprKeys = (packet_key, chain_key)
-                    .try_into()
-                    .map_err(|_| KeyPairError::GeneralError("cannot instantiate hopr keys".into()))?;
+                let ret: HoprKeys = (packet_key, chain_key).try_into().map_err(|_| {
+                    KeyPairError::GeneralError("cannot instantiate hopr keys".into())
+                })?;
 
                 Ok((ret, true))
             }
@@ -351,7 +362,10 @@ impl HoprKeys {
         let mut ciphertext = serde_json::to_vec(&private_keys)?;
         encryptor.apply_keystream(&mut ciphertext);
 
-        let mac = Keccak256::new().chain(&key[16..32]).chain(&ciphertext).finalize();
+        let mac = Keccak256::new()
+            .chain(&key[16..32])
+            .chain(&ciphertext)
+            .finalize();
 
         let keystore = EthKeystore {
             id: self.id,
@@ -393,11 +407,17 @@ impl Debug for HoprKeys {
         f.debug_struct("HoprKeys")
             .field(
                 "packet_key",
-                &format_args!("(priv_key: <REDACTED>, pub_key: {}", self.packet_key.public().to_hex()),
+                &format_args!(
+                    "(priv_key: <REDACTED>, pub_key: {}",
+                    self.packet_key.public().to_hex()
+                ),
             )
             .field(
                 "chain_key",
-                &format_args!("(priv_key: <REDACTED>, pub_key: {}", self.chain_key.public().to_hex()),
+                &format_args!(
+                    "(priv_key: <REDACTED>, pub_key: {}",
+                    self.chain_key.public().to_hex()
+                ),
             )
             .finish()
     }
@@ -407,8 +427,8 @@ impl Debug for HoprKeys {
 mod tests {
     use std::fs;
 
-    use anyhow::Context;
     use crate::{crypto::prelude::*, crypto_random::Randomizable};
+    use anyhow::Context;
     use tempfile::tempdir;
     use uuid::Uuid;
 
@@ -430,12 +450,16 @@ mod tests {
         let keys = HoprKeys::random();
 
         keys.write_eth_keystore(
-            identity_dir.to_str().context("should be convertible to string")?,
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
             DEFAULT_PASSWORD,
         )?;
 
         let (deserialized, needs_migration) = HoprKeys::read_eth_keystore(
-            identity_dir.to_str().context("should be convertible to string")?,
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
             DEFAULT_PASSWORD,
         )?;
 
@@ -454,12 +478,16 @@ mod tests {
         let old_keystore_file = r#"{"id":"8e5fe142-6ef9-4fbb-aae8-5de32b680e31","version":3,"crypto":{"cipher":"aes-128-ctr","cipherparams":{"iv":"04141354edb9dfb0c65e6905a3a0b9dd"},"ciphertext":"74f12f72cf2d3d73ff09f783cb9b57995b3808f7d3f71aa1fa1968696aedfbdd","kdf":"scrypt","kdfparams":{"salt":"f5e3f04eaa0c9efffcb5168c6735d7e1fe4d96f48a636c4f00107e7c34722f45","n":1,"dklen":32,"p":1,"r":8},"mac":"d0daf0e5d14a2841f0f7221014d805addfb7609d85329d4c6424a098e50b6fbe"}}"#;
 
         fs::write(
-            identity_dir.to_str().context("should be convertible to string")?,
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
             old_keystore_file.as_bytes(),
         )?;
 
         let (deserialized, needs_migration) = HoprKeys::read_eth_keystore(
-            identity_dir.to_str().context("should be convertible to string")?,
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
             "local",
         )?;
 
@@ -476,7 +504,9 @@ mod tests {
     fn test_auto_migration() -> anyhow::Result<()> {
         let tmp = tempdir()?;
         let identity_dir = tmp.path().join("hopr-unit-test-identity");
-        let identity_path: &str = identity_dir.to_str().context("should be convertible to string")?;
+        let identity_path: &str = identity_dir
+            .to_str()
+            .context("should be convertible to string")?;
 
         let old_keystore_file = r#"{"id":"8e5fe142-6ef9-4fbb-aae8-5de32b680e31","version":3,"crypto":{"cipher":"aes-128-ctr","cipherparams":{"iv":"04141354edb9dfb0c65e6905a3a0b9dd"},"ciphertext":"74f12f72cf2d3d73ff09f783cb9b57995b3808f7d3f71aa1fa1968696aedfbdd","kdf":"scrypt","kdfparams":{"salt":"f5e3f04eaa0c9efffcb5168c6735d7e1fe4d96f48a636c4f00107e7c34722f45","n":1,"dklen":32,"p":1,"r":8},"mac":"d0daf0e5d14a2841f0f7221014d805addfb7609d85329d4c6424a098e50b6fbe"}}"#;
         fs::write(identity_path, old_keystore_file.as_bytes())?;
@@ -504,7 +534,9 @@ mod tests {
     fn test_should_not_overwrite_existing() -> anyhow::Result<()> {
         let tmp = tempdir()?;
         let identity_dir = tmp.path().join("hopr-unit-test-identity");
-        let identity_path: &str = identity_dir.to_str().context("should be convertible to string")?;
+        let identity_path: &str = identity_dir
+            .to_str()
+            .context("should be convertible to string")?;
 
         fs::write(identity_path, "".as_bytes())?;
 
@@ -523,14 +555,16 @@ mod tests {
     fn test_from_privatekey() {
         let private_key = "0x56b29cefcdf576eea306ba2fd5f32e651c09e0abbc018c47bdc6ef44f6b7506f1050f95137770478f50b456267f761f1b8b341a13da68bc32e5c96984fcd52ae";
 
-        let from_private_key = HoprKeys::init(IdentityRetrievalModes::FromPrivateKey { private_key }).unwrap();
+        let from_private_key =
+            HoprKeys::init(IdentityRetrievalModes::FromPrivateKey { private_key }).unwrap();
 
         let private_key_without_prefix = "56b29cefcdf576eea306ba2fd5f32e651c09e0abbc018c47bdc6ef44f6b7506f1050f95137770478f50b456267f761f1b8b341a13da68bc32e5c96984fcd52ae";
 
-        let from_private_key_without_prefix = HoprKeys::init(IdentityRetrievalModes::FromPrivateKey {
-            private_key: private_key_without_prefix,
-        })
-        .unwrap();
+        let from_private_key_without_prefix =
+            HoprKeys::init(IdentityRetrievalModes::FromPrivateKey {
+                private_key: private_key_without_prefix,
+            })
+            .unwrap();
 
         assert_eq!(from_private_key, from_private_key_without_prefix);
     }
@@ -539,7 +573,9 @@ mod tests {
     fn test_from_privatekey_into_file() -> anyhow::Result<()> {
         let tmp = tempdir()?;
         let identity_dir = tmp.path().join("hopr-unit-test-identity");
-        let identity_path = identity_dir.to_str().context("should be convertible to string")?;
+        let identity_path = identity_dir
+            .to_str()
+            .context("should be convertible to string")?;
         let id = Uuid::new_v4();
 
         let keys = HoprKeys::init(IdentityRetrievalModes::FromIdIntoFile {
@@ -549,7 +585,8 @@ mod tests {
         })
         .expect("should initialize new key");
 
-        let (deserialized, needs_migration) = HoprKeys::read_eth_keystore(identity_path, "local").unwrap();
+        let (deserialized, needs_migration) =
+            HoprKeys::read_eth_keystore(identity_path, "local").unwrap();
 
         assert!(!needs_migration);
         assert_eq!(
