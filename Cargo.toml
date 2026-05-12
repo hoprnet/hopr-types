@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.7.0"
+version = "1.8.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -18,7 +18,15 @@ name = "hopr-types"
 [features]
 default = ["rayon"]
 
-all-types = ["chain", "crypto", "internal", "primitive", "random"]
+all-types = [
+  "chain",
+  "crypto",
+  "internal",
+  "keypair",
+  "primitive",
+  "random",
+  "telemetry",
+]
 
 primitive = [
   "dep:bigdecimal",
@@ -82,6 +90,22 @@ rayon = ["internal", "dep:rayon"]
 use-bindings = ["chain", "dep:hopr-bindings"]
 rust-ecdsa = ["crypto"]
 
+keypair = [
+  "crypto",
+  "serde",
+  "dep:scrypt",
+  "dep:serde_json",
+  "dep:uuid",
+  "dep:tracing",
+]
+keypair-to-file = ["keypair"]
+
+telemetry = [
+  "dep:opentelemetry",
+  "dep:opentelemetry_sdk",
+  "dep:opentelemetry-prometheus-text-exporter",
+]
+
 [dependencies]
 aes = { version = "0.8.4", optional = true }
 anyhow = { version = "1.0.102", optional = true }
@@ -119,6 +143,12 @@ libp2p-identity = { version = "0.2.13", optional = true, features = [
 ] }
 multiaddr = { version = "0.18.2", optional = true }
 num_enum = { version = "0.7.6", optional = true }
+opentelemetry = { version = "0.31.0", optional = true, features = ["metrics"] }
+opentelemetry_sdk = { version = "0.31.0", optional = true, features = [
+  "metrics",
+  "experimental_metrics_custom_reader",
+] }
+opentelemetry-prometheus-text-exporter = { version = "0.2.1", optional = true }
 poly1305 = { version = "0.8.0", optional = true }
 primitive-types = { version = "0.14.0", optional = true }
 rand = { version = "0.10.0", optional = true, features = ["thread_rng"] }
@@ -130,8 +160,12 @@ secp256k1 = { version = "0.31.1", optional = true, default-features = false, fea
   "std",
   "global-context",
 ] }
+scrypt = { version = "0.12.0", optional = true, default-features = false, features = [
+  "phc",
+] }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 serde_bytes = { version = "0.11.19", optional = true }
+serde_json = { version = "1.0.149", optional = true }
 serde_with = { version = "3.18.0", optional = true }
 sha2 = { version = "0.10.9", optional = true }
 sha3 = { version = "0.10.8", optional = true }
@@ -143,6 +177,7 @@ tracing = { version = "0.1.44", optional = true, features = [
   "release_max_level_debug",
 ] }
 typenum = { version = "1.19.0", optional = true }
+uuid = { version = "1.23.1", optional = true, features = ["serde", "v4"] }
 zeroize = { version = "1.8.2", optional = true, features = ["zeroize_derive"] }
 
 [dev-dependencies]
@@ -158,6 +193,7 @@ parameterized = "2.0.0"
 postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
+tempfile = "3.27.0"
 tokio = { version = "1.50.0", features = [
   "rt-multi-thread",
   "macros",
@@ -165,10 +201,10 @@ tokio = { version = "1.50.0", features = [
 ] }
 
 [package.metadata.cargo-machete]
-ignored = ["serde_bytes"]
+ignored = ["serde_bytes", "serde_json"]
 
 [package.metadata.cargo-shear]
-ignored = ["serde_bytes"]
+ignored = ["serde_bytes", "serde_json"]
 
 [[bench]]
 name = "hash_bench"
