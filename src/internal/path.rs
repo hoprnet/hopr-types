@@ -638,7 +638,9 @@ mod tests {
         assert!(chain_path.contains_cycle(), "must be cyclic");
 
         assert!(
-            ValidatedPath::new(ADDRESSES[0], chain_path, &cg).await.is_err(),
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
             "non-adjacent duplicate chain address must be rejected"
         );
 
@@ -816,7 +818,9 @@ mod tests {
         assert!(chain_path.contains_cycle(), "path must contain a cycle");
 
         assert!(
-            ValidatedPath::new(ADDRESSES[0], chain_path, &cg).await.is_err(),
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
             "non-adjacent duplicate chain address must be rejected"
         );
 
@@ -833,7 +837,9 @@ mod tests {
         assert!(chain_path.contains_cycle(), "path must contain a cycle");
 
         assert!(
-            ValidatedPath::new(ADDRESSES[0], chain_path, &cg).await.is_err(),
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
             "reusing a relay at non-adjacent positions must be rejected"
         );
 
