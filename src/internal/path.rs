@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::{Display, Formatter},
     ops::Deref,
 };
@@ -275,6 +276,7 @@ impl ValidatedPath {
 
         let mut keys = Vec::with_capacity(path.num_hops());
         let mut addrs = Vec::with_capacity(path.num_hops());
+        let mut seen: HashSet<Address> = HashSet::with_capacity(path.num_hops());
 
         let num_hops = path.num_hops();
         for (i, hop) in path.into_iter().enumerate() {
@@ -301,8 +303,13 @@ impl ValidatedPath {
                 }
             };
 
-            // Check for loops
+            // Adjacent loop check (also catches origin == path[0] since origin is not in `seen`).
             if ticket_issuer == ticket_receiver {
+                return Err(LoopsNotAllowed(ticket_receiver.to_hex()));
+            }
+
+            // Non-adjacent duplicate: two distinct offchain keys that resolve to the same chain address.
+            if !seen.insert(ticket_receiver) {
                 return Err(LoopsNotAllowed(ticket_receiver.to_hex()));
             }
 
@@ -614,10 +621,10 @@ mod tests {
 
     #[parameterized(hops = { 2, 3 })]
     #[parameterized_macro(tokio::test)]
-    async fn validated_path_must_allow_cyclic(hops: usize) -> anyhow::Result<()> {
+    async fn validated_path_should_reject_non_adjacent_cycle(hops: usize) -> anyhow::Result<()> {
         let (cg, peers) = DummyResolver::new(ADDRESSES[0]);
 
-        // path: 0 -> 1 -> 2 -> 3 -> 1
+        // path: 0 -> 1 -> 2 -> 3 -> 1 (or 0 -> 1 -> 2 -> 1 for hops=2)
         let chain_path = ChainPath::new(
             peers
                 .iter()
@@ -630,36 +637,11 @@ mod tests {
         assert_eq!(hops + 1, chain_path.num_hops(), "must be a {hops} hop path");
         assert!(chain_path.contains_cycle(), "must be cyclic");
 
-        let validated = ValidatedPath::new(ADDRESSES[0], chain_path.clone(), &cg)
-            .await
-            .context(format!("must be valid {hops} hop path"))?;
-
-        assert_eq!(
-            chain_path.num_hops(),
-            validated.num_hops(),
-            "validated path must have the same length"
-        );
-        assert_eq!(
-            validated.chain_path(),
-            &chain_path,
-            "validated path must have the same chain path"
-        );
-
-        assert_eq!(
-            peers
-                .iter()
-                .copied()
-                .skip(1)
-                .take(hops)
-                .chain(iter::once(peers[1]))
-                .collect::<Vec<_>>(),
-            validated
-                .transport_path()
-                .iter()
-                .copied()
-                .zip(validated.chain_path().iter().copied())
-                .collect::<Vec<_>>(),
-            "validated path must have the same transport path"
+        assert!(
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
+            "non-adjacent duplicate chain address must be rejected"
         );
 
         Ok(())
@@ -826,20 +808,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validated_path_should_allow_long_cycles() -> anyhow::Result<()> {
+    async fn validated_path_should_reject_long_cycle() -> anyhow::Result<()> {
         let (cg, peers) = DummyResolver::new(ADDRESSES[0]);
 
-        // path 0 -> 1 -> 2 -> 3 -> 1 -> 2
+        // path 0 -> 1 -> 2 -> 3 -> 1 -> 2 (both 1 and 2 appear twice)
         let chain_path =
             ChainPath::new([peers[1].1, peers[2].1, peers[3].1, peers[1].1, peers[2].1])?;
 
         assert!(chain_path.contains_cycle(), "path must contain a cycle");
 
-        let validated = ValidatedPath::new(ADDRESSES[0], chain_path.clone(), &cg)
-            .await
-            .context("must be valid path")?;
+        assert!(
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
+            "non-adjacent duplicate chain address must be rejected"
+        );
 
-        assert_eq!(&chain_path, validated.chain_path(), "path must be the same");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn validated_path_should_reject_non_adjacent_relay_reuse() -> anyhow::Result<()> {
+        let (cg, peers) = DummyResolver::new(ADDRESSES[0]);
+
+        // path: 0 -> 1 -> 2 -> 3 -> 2 (relay 2 used at positions 1 and 3)
+        let chain_path = ChainPath::new([peers[1].1, peers[2].1, peers[3].1, peers[2].1])?;
+
+        assert!(chain_path.contains_cycle(), "path must contain a cycle");
+
+        assert!(
+            ValidatedPath::new(ADDRESSES[0], chain_path, &cg)
+                .await
+                .is_err(),
+            "reusing a relay at non-adjacent positions must be rejected"
+        );
 
         Ok(())
     }
