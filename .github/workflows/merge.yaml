@@ -17,30 +17,20 @@ jobs:
       matrix:
         include:
           - architecture: x86_64-linux
-            runner: self-hosted-hoprnet-bigger
-            build_command: nix build -L .#lib-hopr-types-x86_64-linux
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@build-library-v1
+            runner: depot-ubuntu-24.04-4
+          - architecture: aarch64-linux
+            runner: depot-ubuntu-24.04-arm-4
+          - architecture: aarch64-darwin
+            runner: depot-macos-15
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@build-library-v2
     permissions:
       contents: read
     with:
       source_branch: ${{ github.event.pull_request.base.ref }}
-      architecture: ${{ matrix.architecture }}
-      build_command: ${{ matrix.build_command }}
-      runner: ${{ matrix.runner }}
-    secrets:
-      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-  publish-dry-run:
-    name: Publish
-    needs: [build-library]
-    if: github.event.pull_request.merged == true
-    uses: hoprnet/hopr-workflows/.github/workflows/publish-crates.yaml@e4fadaa70234b9d734d5c51b6900602e55492ce2 # workflow-publish-crates-v3
-    permissions:
-      contents: read
-    with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
-      package: hopr-types
       version_type: pr
-      runner: self-hosted-hoprnet-bigger
+      architecture: ${{ matrix.architecture }}
+      package_name: hopr-types
+      runner: ${{ matrix.runner }}
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   notify:
@@ -48,9 +38,8 @@ jobs:
     permissions: {}
     needs:
       - build-library
-      - publish-dry-run
     if: ${{ always() && github.event.pull_request.merged == true && !success() }}
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - name: Notify failed merge pipeline
         uses: zulip/github-actions-zulip/send-message@e4c8f27c732ba9bd98ac6be0583096dea82feea5 # v1.0.2
