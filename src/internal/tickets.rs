@@ -146,6 +146,7 @@ impl WinningProbability {
     }
 
     /// Gets the minimum of two winning probabilities.
+    #[allow(unstable_name_collisions)]
     pub fn min(&self, other: &Self) -> Self {
         if self.approx_cmp(other) == Ordering::Less {
             *self
@@ -155,6 +156,7 @@ impl WinningProbability {
     }
 
     /// Gets the maximum of two winning probabilities.
+    #[allow(unstable_name_collisions)]
     pub fn max(&self, other: &Self) -> Self {
         if self.approx_cmp(other) == Ordering::Greater {
             *self
