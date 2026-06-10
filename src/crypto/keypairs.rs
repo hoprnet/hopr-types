@@ -37,6 +37,7 @@ pub trait Keypair: ConstantTimeEq + Sized {
     fn public(&self) -> &Self::Public;
 
     /// Consumes the instance and produces separated private and public parts
+    #[allow(unstable_name_collisions)]
     fn unzip(self) -> (SecretValue<Self::SecretLen>, Self::Public) {
         (self.secret().clone(), self.public().clone())
     }
