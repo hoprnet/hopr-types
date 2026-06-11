@@ -11,14 +11,15 @@ concurrency:
 jobs:
   coverage:
     name: Coverage
-    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@6895dbbc515e39e0e283a68a80b8628ca6ead37a # workflow-tests-v3
+    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@268553d7984344080e3dc65eb92778c9103af7ec # workflow-tests-v3
     with:
       source_branch: ${{ github.ref_name }}
-      enable_unit_tests: false
-      enable_integration_tests: false
-      enable_unit_coverage: true
+      unit_tests: false
+      integration_tests: false
+      unit_coverage: true
+      unconditional: true
       unit_coverage_command: "nix run .#coverage-unit"
-      runner_unit: depot-ubuntu-24.04-4
+      runner: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -29,7 +30,7 @@ jobs:
       contents: read
       checks: write
       pull-requests: write
-    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@6895dbbc515e39e0e283a68a80b8628ca6ead37a # workflow-benchmark-v1
+    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
     with:
       source_branch: ${{ github.ref_name }}
       runner: depot-ubuntu-24.04-4
