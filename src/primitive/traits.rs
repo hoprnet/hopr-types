@@ -133,6 +133,7 @@ pub trait AsUnixTimestamp {
 }
 
 impl AsUnixTimestamp for std::time::SystemTime {
+    #[allow(unstable_name_collisions)]
     fn as_unix_timestamp(&self) -> std::time::Duration {
         self.saturating_sub(std::time::SystemTime::UNIX_EPOCH)
     }

@@ -61,6 +61,7 @@ impl From<ChannelStatus> for i8 {
 
 // Manual implementation of PartialEq, because we need only precision up to seconds in PendingToClose
 impl PartialEq for ChannelStatus {
+    #[allow(unstable_name_collisions)]
     fn eq(&self, other: &Self) -> bool {
         // Use pattern matching to avoid recursion
         match (self, other) {
@@ -342,6 +343,7 @@ impl ChannelEntry {
     /// Calculates the remaining channel closure grace period.
     ///
     /// Returns `None` if the channel closure has not been initiated yet (channel is in `Open` state).
+    #[allow(unstable_name_collisions)]
     pub fn remaining_closure_time(&self, current_time: SystemTime) -> Option<Duration> {
         match self.status {
             ChannelStatus::Open => None,
