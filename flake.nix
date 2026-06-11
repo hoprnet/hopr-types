@@ -153,6 +153,7 @@
               ${pre-commit-check.shellHook}
             '';
             extraPackages = with pkgs; [
+              cargo-release
               sqlite
               yq-go
             ];
