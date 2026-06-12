@@ -135,8 +135,9 @@ jobs:
       source_branch: ${{ github.event.pull_request.head.ref }}
       runner: depot-ubuntu-24.04-4
       bencher_project: ${{ github.event.repository.name }}
-      should_build: true
-      should_run: true
+      # Benchmarks disabled for now — flip these two booleans back to re-enable.
+      should_build: false
+      should_run: false
       build_command: "nix build -L .#bench-build"
       run_command: "nix run .#bench-run"
     secrets:
