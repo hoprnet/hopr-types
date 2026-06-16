@@ -890,16 +890,6 @@ const _CHECK_SERDE_BYTES: () = assert!(
     "SimplePseudonym must be 10 bytes"
 );
 
-impl SimplePseudonym {
-    /// Creates a new SimplePseudonym from raw bytes, computing the hex representation.
-    fn from_bytes(bytes: [u8; 10]) -> Self {
-        let hex_str = const_hex::encode(bytes);
-        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
-            .expect("hex string fits in ArrayString");
-        Self(bytes, hex)
-    }
-}
-
 #[cfg(feature = "serde")]
 impl serde::Serialize for SimplePseudonym {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -920,7 +910,10 @@ impl<'de> serde::Deserialize<'de> for SimplePseudonym {
         let arr: [u8; 10] = bytes
             .try_into()
             .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
-        Ok(Self::from_bytes(arr))
+        let hex_str = const_hex::encode(arr);
+        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
+            .expect("hex string fits in ArrayString");
+        Ok(Self(arr, hex))
     }
 }
 
@@ -956,10 +949,13 @@ impl<'a> TryFrom<&'a [u8]> for SimplePseudonym {
     type Error = GeneralError;
 
     fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
-        value
+        let arr: [u8; 10] = value
             .try_into()
-            .map(Self::from_bytes)
-            .map_err(|_| ParseError("SimplePseudonym".into()))
+            .map_err(|_| ParseError("SimplePseudonym".into()))?;
+        let hex_str = const_hex::encode(arr);
+        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
+            .expect("hex string fits in ArrayString");
+        Ok(Self(arr, hex))
     }
 }
 
