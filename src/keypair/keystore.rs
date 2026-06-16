@@ -84,8 +84,9 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer)
-        .and_then(|string| Vec::from_hex(string).map_err(|err: const_hex::FromHexError| Error::custom(err.to_string())))
+    String::deserialize(deserializer).and_then(|string| {
+        Vec::from_hex(string).map_err(|err: const_hex::FromHexError| Error::custom(err.to_string()))
+    })
 }
 
 /// taken from `eth_keystore` library
