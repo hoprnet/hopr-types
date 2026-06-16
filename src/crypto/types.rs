@@ -906,8 +906,8 @@ impl<'de> serde::Deserialize<'de> for SimplePseudonym {
     where
         D: serde::Deserializer<'de>,
     {
-        let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let arr: [u8; 10] = bytes
+        let bytes: Vec<u8> = serde::Deserialize::deserialize(deserializer)?;
+        let arr: [u8; Self::SIZE] = bytes
             .try_into()
             .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
         let hex_str = const_hex::encode(arr);
