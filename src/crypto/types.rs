@@ -879,7 +879,7 @@ pub trait Pseudonym: BytesRepresentable + hash::Hash + Eq + Display + Randomizab
 /// Represents a simple UUID-like pseudonym consisting of 10 bytes.
 ///
 /// Caches the hexadecimal string representation internally for efficiency.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SimplePseudonym(
     pub [u8; Self::SIZE],
     pub arrayvec::ArrayString<{ Self::SIZE * 2 }>,
@@ -926,6 +926,24 @@ impl Display for SimplePseudonym {
 impl Debug for SimplePseudonym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.1.as_str())
+    }
+}
+
+impl std::hash::Hash for SimplePseudonym {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl PartialOrd for SimplePseudonym {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SimplePseudonym {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 
