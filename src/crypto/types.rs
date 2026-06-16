@@ -877,21 +877,62 @@ impl From<[u8; Self::SIZE]> for Response {
 pub trait Pseudonym: BytesRepresentable + hash::Hash + Eq + Display + Randomizable {}
 
 /// Represents a simple UUID-like pseudonym consisting of 10 bytes.
+///
+/// Caches the hexadecimal string representation internally for efficiency.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SimplePseudonym(
-    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] pub [u8; Self::SIZE],
+    pub [u8; Self::SIZE],
+    pub arrayvec::ArrayString<{ Self::SIZE * 2 }>,
 );
+
+const _CHECK_SERDE_BYTES: () = assert!(
+    SimplePseudonym::SIZE == 10,
+    "SimplePseudonym must be 10 bytes"
+);
+
+impl SimplePseudonym {
+    /// Creates a new SimplePseudonym from raw bytes, computing the hex representation.
+    fn from_bytes(bytes: [u8; 10]) -> Self {
+        let hex_str = hex::encode(bytes);
+        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
+            .expect("hex string fits in ArrayString");
+        Self(bytes, hex)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for SimplePseudonym {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SimplePseudonym {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+        let arr: [u8; 10] = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
+        Ok(Self::from_bytes(arr))
+    }
+}
 
 impl Display for SimplePseudonym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_hex())
+        write!(f, "{}", self.1.as_str())
     }
 }
 
 impl Debug for SimplePseudonym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_hex())
+        write!(f, "{}", self.1.as_str())
     }
 }
 
@@ -905,13 +946,19 @@ impl AsRef<[u8]> for SimplePseudonym {
     }
 }
 
+impl AsRef<str> for SimplePseudonym {
+    fn as_ref(&self) -> &str {
+        self.1.as_str()
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for SimplePseudonym {
     type Error = GeneralError;
 
     fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
         value
             .try_into()
-            .map(Self)
+            .map(Self::from_bytes)
             .map_err(|_| ParseError("SimplePseudonym".into()))
     }
 }
@@ -941,6 +988,7 @@ mod tests {
         keypairs::{Keypair, OffchainKeypair},
         types::{
             Challenge, HalfKey, HalfKeyChallenge, Hash, OffchainPublicKey, PublicKey, Response,
+            SimplePseudonym,
         },
     };
 
@@ -1138,5 +1186,66 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_serialize_contains_bytes() -> anyhow::Result<()> {
+        let bytes = hex!("0102030405060708090a");
+        let pseudonym = SimplePseudonym::try_from(bytes.as_ref())?;
+
+        let serialized = postcard::to_allocvec(&pseudonym)?;
+        let found = serialized.windows(bytes.len()).any(|w| w == bytes);
+        assert!(
+            found,
+            "serialized bytes should contain original bytes, got {:02x?}",
+            serialized
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_roundtrip() -> anyhow::Result<()> {
+        let original = SimplePseudonym::random();
+
+        let serialized = postcard::to_allocvec(&original)?;
+        let deserialized: SimplePseudonym = postcard::from_bytes(&serialized)?;
+
+        assert_eq!(original, deserialized, "roundtrip should preserve value");
+        let original_bytes: &[u8] = original.as_ref();
+        let deserialized_bytes: &[u8] = deserialized.as_ref();
+        assert_eq!(original_bytes, deserialized_bytes, "bytes should match");
+
+        let original_hex: &str = AsRef::<str>::as_ref(&original);
+        let deserialized_hex: &str = AsRef::<str>::as_ref(&deserialized);
+        assert_eq!(original_hex, deserialized_hex, "hex strings should match");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_simple_pseudonym_as_ref_str() -> anyhow::Result<()> {
+        let bytes = hex!("0102030405060708090a");
+        let pseudonym = SimplePseudonym::try_from(bytes.as_ref())?;
+
+        let hex_str: &str = AsRef::<str>::as_ref(&pseudonym);
+        assert_eq!(hex_str.len(), 20, "hex string should be 20 characters");
+        assert_eq!(
+            hex_str, "0102030405060708090a",
+            "hex string should match expected value"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_simple_pseudonym_is_copy() {
+        let original = SimplePseudonym::random();
+        let _copy = original;
+
+        let bytes: &[u8] = original.as_ref();
+        assert_eq!(bytes.len(), 10, "original should still be valid after copy");
     }
 }

@@ -2381,6 +2381,7 @@ dependencies = [
  "aes",
  "anyhow",
  "aquamarine",
+ "arrayvec",
  "async-trait",
  "bigdecimal",
  "bimap",
