@@ -655,7 +655,7 @@ impl PublicKey {
 
     /// Serializes the public key to a binary uncompressed form and converts it to hexadecimal string representation.
     pub fn to_uncompressed_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_uncompressed_bytes()))
+        format!("0x{}", const_hex::encode(self.to_uncompressed_bytes()))
     }
 }
 
@@ -893,7 +893,7 @@ const _CHECK_SERDE_BYTES: () = assert!(
 impl SimplePseudonym {
     /// Creates a new SimplePseudonym from raw bytes, computing the hex representation.
     fn from_bytes(bytes: [u8; 10]) -> Self {
-        let hex_str = hex::encode(bytes);
+        let hex_str = const_hex::encode(bytes);
         let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
             .expect("hex string fits in ArrayString");
         Self(bytes, hex)

@@ -1,6 +1,6 @@
 // Highly inspired by https://github.com/roynalnaruto/eth-keystore-rs
 
-use hex::{FromHex, ToHex};
+use const_hex::traits::{FromHex, ToHexExt};
 use serde::{Deserialize, Serialize, de::Deserializer, ser::Serializer};
 use uuid::Uuid;
 
@@ -76,7 +76,7 @@ where
     T: AsRef<[u8]>,
     S: Serializer,
 {
-    serializer.serialize_str(&buffer.encode_hex::<String>())
+    serializer.serialize_str(&buffer.encode_hex())
 }
 
 fn hex_to_buffer<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -85,7 +85,7 @@ where
 {
     use serde::de::Error;
     String::deserialize(deserializer)
-        .and_then(|string| Vec::from_hex(string).map_err(|err| Error::custom(err.to_string())))
+        .and_then(|string| Vec::from_hex(string).map_err(|err: const_hex::FromHexError| Error::custom(err.to_string())))
 }
 
 /// taken from `eth_keystore` library

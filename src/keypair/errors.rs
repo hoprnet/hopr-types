@@ -1,5 +1,4 @@
 use crate::crypto::errors::CryptoError;
-use hex::FromHexError;
 use serde_json::Error as JsonError;
 use thiserror::Error;
 
@@ -14,8 +13,8 @@ pub enum KeyPairError {
     #[error("JSON error: {0}")]
     JsonError(#[from] JsonError),
 
-    #[error("hex parsing ")]
-    HexParsingError(#[from] FromHexError),
+    #[error("hex parsing error: {0}")]
+    HexParsingError(String),
 
     #[error("key derivation error {0}")]
     KeyDerivationError(String),

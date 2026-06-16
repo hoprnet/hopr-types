@@ -122,7 +122,8 @@ impl FromStr for HoprKeys {
         }
 
         let mut priv_key_raw = [0u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH];
-        hex::decode_to_slice(maybe_priv_key, &mut priv_key_raw[..])?;
+        const_hex::decode_to_slice(maybe_priv_key, &mut priv_key_raw[..])
+            .map_err(|e| KeyPairError::HexParsingError(e.to_string()))?;
 
         priv_key_raw.try_into()
     }
