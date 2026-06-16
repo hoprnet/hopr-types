@@ -33,9 +33,9 @@ pub struct VrfParameters {
 impl std::fmt::Debug for VrfParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VrfParameters")
-            .field("V", &hex::encode(self.V.to_encoded_point(true)))
-            .field("h", &hex::encode(self.h.to_bytes()))
-            .field("s", &hex::encode(self.s.to_bytes()))
+            .field("V", &const_hex::encode(self.V.to_encoded_point(true)))
+            .field("h", &const_hex::encode(self.h.to_bytes()))
+            .field("s", &const_hex::encode(self.s.to_bytes()))
             .finish()
     }
 }

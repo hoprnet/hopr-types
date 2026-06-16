@@ -67,7 +67,7 @@ impl Address {
     /// Turns the address into a checksum-ed address string
     /// according to [EIP-55](https://eips.ethereum.org/EIPS/eip-55).
     pub fn to_checksum(&self) -> String {
-        let address_hex = hex::encode(self.0);
+        let address_hex = const_hex::encode(self.0);
 
         let hash = sha3::Keccak256::digest(address_hex.as_bytes());
 

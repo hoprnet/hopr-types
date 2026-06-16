@@ -189,8 +189,8 @@ pub struct HoprSenderId(
 impl std::fmt::Debug for HoprSenderId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("HoprSenderId")
-            .field(&hex::encode(&self.0[0..HoprPseudonym::SIZE]))
-            .field(&hex::encode(&self.0[HoprPseudonym::SIZE..]))
+            .field(&const_hex::encode(&self.0[0..HoprPseudonym::SIZE]))
+            .field(&const_hex::encode(&self.0[HoprPseudonym::SIZE..]))
             .finish()
     }
 }

@@ -33,11 +33,11 @@ pub fn to_hex_shortened<const M: usize>(data: &impl AsRef<[u8]>) -> String {
     if data.len() * 2 > M {
         format!(
             "{}..{}",
-            hex::encode(&data[0..(num_chars - 2) / 4]),
-            hex::encode(&data[data.len() - (num_chars - 2) / 4..])
+            const_hex::encode(&data[0..(num_chars - 2) / 4]),
+            const_hex::encode(&data[data.len() - (num_chars - 2) / 4..])
         )
     } else {
-        hex::encode(data)
+        const_hex::encode(data)
     }
 }
 
