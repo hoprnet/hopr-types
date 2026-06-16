@@ -83,7 +83,7 @@ pub trait BytesRepresentable<E = GeneralError>:
 
 impl<T: BytesRepresentable> ToHex for T {
     fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.as_ref()))
+        format!("0x{}", const_hex::encode(self.as_ref()))
     }
 
     fn from_hex(str: &str) -> Result<Self> {
@@ -93,7 +93,7 @@ impl<T: BytesRepresentable> ToHex for T {
                 .or_else(|| str.strip_prefix("0X"))
                 .unwrap_or(str);
 
-            hex::decode(data)
+            const_hex::decode(data)
                 .map_err(|e| ParseError(e.to_string()))
                 .and_then(|bytes| T::try_from(&bytes))
         } else {
