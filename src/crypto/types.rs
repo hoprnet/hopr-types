@@ -973,12 +973,15 @@ impl<'a> TryFrom<&'a [u8]> for SimplePseudonym {
     type Error = GeneralError;
 
     fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
-        let arr: [u8; 10] = value
+        let arr: [u8; Self::SIZE] = value
             .try_into()
             .map_err(|_| ParseError("SimplePseudonym".into()))?;
-        let hex_str = const_hex::encode(arr);
-        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
+
+        let mut hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::zero_filled();
+        // Unsafe: the hex string is guaranteed to be valid UTF-8
+        unsafe { const_hex::encode_to_slice(arr, hex.as_bytes_mut()) }
             .expect("hex string fits in ArrayString");
+
         Ok(Self(arr, hex))
     }
 }
