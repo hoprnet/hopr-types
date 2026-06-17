@@ -5,7 +5,7 @@ on:
       - main
 permissions:
   contents: read
-  id-token: write
+  id-token: write # zizmor: ignore[excessive-permissions]
 concurrency:
   group: branches-${{ github.ref_name }}
   cancel-in-progress: false
@@ -15,12 +15,11 @@ jobs:
     uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@798d791de5c5485c3043049781dfd0938539a36a # workflow-tests-v6
     with:
       source_branch: ${{ github.ref_name }}
-      unit_tests: false
-      integration_tests: false
-      unit_coverage: true
-      unconditional: true
+      enable_unit_tests: false
+      enable_integration_tests: false
+      enable_unit_coverage: true
       unit_coverage_command: "nix run .#coverage-unit"
-      runner: depot-ubuntu-24.04-4
+      runner_unit: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   benchmarks:
