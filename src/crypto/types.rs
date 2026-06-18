@@ -1332,8 +1332,8 @@ mod tests {
     fn test_simple_pseudonym_deserialize_from_cbor_array() -> anyhow::Result<()> {
         let bytes = hex!("0102030405060708090a");
 
-        // CBOR byte array encoding: major type 0x80 (array) with 10 bytes
-        // 0x80 + 10 (length) followed by each byte
+        // CBOR array encoding: major type 0x80 (array) with 10 integer elements
+        // 0x8a = 0x80 + 10 (array of 10 items), followed by CBOR-encoded integers
         let mut cbor_array = vec![0x8a]; // 0x80 + 10 = 0x8a (array of 10 items)
         cbor_array.extend_from_slice(&bytes);
 
