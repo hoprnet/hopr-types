@@ -1326,6 +1326,71 @@ mod tests {
         Ok(())
     }
 
+    /// Test deserialization from CBOR byte array (visit_seq path)
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_from_cbor_array() -> anyhow::Result<()> {
+        let bytes = hex!("0102030405060708090a");
+
+        // CBOR byte array encoding: major type 0x80 (array) with 10 bytes
+        // 0x80 + 10 (length) followed by each byte
+        let mut cbor_array = vec![0x8a]; // 0x80 + 10 = 0x8a (array of 10 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let deserialized: SimplePseudonym = ciborium::de::from_reader(&cbor_array[..])?;
+        assert_eq!(AsRef::<str>::as_ref(&deserialized), "0102030405060708090a");
+
+        Ok(())
+    }
+
+    /// Test error case: wrong length in visit_bytes
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_wrong_length() {
+        let bytes = hex!("0102030405"); // Only 5 bytes, not 10
+
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&bytes, &mut serialized).unwrap();
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&serialized[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for wrong length"
+        );
+    }
+
+    /// Test error case: sequence too long in visit_seq
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_seq_too_long() {
+        // CBOR array with 11 bytes (too long)
+        let bytes = [0u8; 11];
+        let mut cbor_array = vec![0x8b]; // 0x80 + 11 = 0x8b (array of 11 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&cbor_array[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for sequence too long"
+        );
+    }
+
+    /// Test error case: sequence too short in visit_seq
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_seq_too_short() {
+        // CBOR array with 5 bytes (too short)
+        let bytes = hex!("0102030405");
+        let mut cbor_array = vec![0x85]; // 0x80 + 5 = 0x85 (array of 5 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&cbor_array[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for sequence too short"
+        );
+    }
+
     #[test]
     fn test_simple_pseudonym_as_ref_str() -> anyhow::Result<()> {
         let bytes = hex!("0102030405060708090a");
