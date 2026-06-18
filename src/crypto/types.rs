@@ -922,14 +922,26 @@ impl<'de> serde::Deserialize<'de> for SimplePseudonym {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let mut bytes = Vec::new();
-                while let Some(byte) = seq.next_element()? {
-                    bytes.push(byte);
+                // Collect directly into a fixed-size buffer to prevent memory exhaustion
+                let mut buffer = [0u8; SimplePseudonym::SIZE];
+                let mut index = 0;
+
+                while let Some(byte) = seq.next_element::<u8>()? {
+                    if index >= SimplePseudonym::SIZE {
+                        return Err(serde::de::Error::custom(
+                            "SimplePseudonym sequence too long",
+                        ));
+                    }
+                    buffer[index] = byte;
+                    index += 1;
                 }
-                let arr: [u8; SimplePseudonym::SIZE] = bytes
-                    .try_into()
-                    .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
-                Ok(arr.into())
+
+                // Also fail if we got too few elements
+                if index < SimplePseudonym::SIZE {
+                    return Err(serde::de::Error::custom("SimplePseudonym sequence too short"));
+                }
+
+                Ok(buffer.into())
             }
         }
 
@@ -1242,7 +1254,8 @@ mod tests {
         let bytes = hex!("0102030405060708090a");
         let pseudonym = SimplePseudonym::try_from(bytes.as_ref())?;
 
-        let serialized = serde_cbor::to_vec(&pseudonym)?;
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&pseudonym, &mut serialized)?;
         let found = serialized.windows(bytes.len()).any(|w| w == bytes);
         assert!(
             found,
@@ -1275,8 +1288,9 @@ mod tests {
     fn test_simple_pseudonym_roundtrip() -> anyhow::Result<()> {
         let original = SimplePseudonym::random();
 
-        let serialized = serde_cbor::to_vec(&original)?;
-        let deserialized: SimplePseudonym = serde_cbor::from_slice(&serialized)?;
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&original, &mut serialized)?;
+        let deserialized: SimplePseudonym = ciborium::de::from_reader(&serialized[..])?;
 
         assert_eq!(original, deserialized, "roundtrip should preserve value");
         let original_bytes: &[u8] = original.as_ref();
