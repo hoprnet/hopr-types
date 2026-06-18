@@ -880,15 +880,7 @@ pub trait Pseudonym: BytesRepresentable + hash::Hash + Eq + Display + Randomizab
 ///
 /// Caches the hexadecimal string representation internally for efficiency.
 #[derive(Copy, Clone, Eq)]
-pub struct SimplePseudonym(
-    pub [u8; Self::SIZE],
-    pub arrayvec::ArrayString<{ Self::SIZE * 2 }>,
-);
-
-const _CHECK_SERDE_BYTES: () = assert!(
-    SimplePseudonym::SIZE == 10,
-    "SimplePseudonym must be 10 bytes"
-);
+pub struct SimplePseudonym([u8; Self::SIZE], arrayvec::ArrayString<{ Self::SIZE * 2 }>);
 
 #[cfg(feature = "serde")]
 impl serde::Serialize for SimplePseudonym {
@@ -906,14 +898,56 @@ impl<'de> serde::Deserialize<'de> for SimplePseudonym {
     where
         D: serde::Deserializer<'de>,
     {
-        let bytes: Vec<u8> = serde::Deserialize::deserialize(deserializer)?;
-        let arr: [u8; Self::SIZE] = bytes
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
-        let hex_str = const_hex::encode(arr);
-        let hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::from(&hex_str)
-            .expect("hex string fits in ArrayString");
-        Ok(Self(arr, hex))
+        // Use a visitor that accepts both byte strings and byte arrays
+        struct SimplePseudonymVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SimplePseudonymVisitor {
+            type Value = SimplePseudonym;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a byte string or an array of bytes")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let arr: [u8; SimplePseudonym::SIZE] = v
+                    .try_into()
+                    .map_err(|_| serde::de::Error::custom("invalid SimplePseudonym length"))?;
+                Ok(arr.into())
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                // Collect directly into a fixed-size buffer to prevent memory exhaustion
+                let mut buffer = [0u8; SimplePseudonym::SIZE];
+                let mut index = 0;
+
+                while let Some(byte) = seq.next_element::<u8>()? {
+                    if index >= SimplePseudonym::SIZE {
+                        return Err(serde::de::Error::custom(
+                            "SimplePseudonym sequence too long",
+                        ));
+                    }
+                    buffer[index] = byte;
+                    index += 1;
+                }
+
+                // Also fail if we got too few elements
+                if index < SimplePseudonym::SIZE {
+                    return Err(serde::de::Error::custom(
+                        "SimplePseudonym sequence too short",
+                    ));
+                }
+
+                Ok(buffer.into())
+            }
+        }
+
+        deserializer.deserialize_bytes(SimplePseudonymVisitor)
     }
 }
 
@@ -969,6 +1003,16 @@ impl AsRef<str> for SimplePseudonym {
     }
 }
 
+impl From<[u8; Self::SIZE]> for SimplePseudonym {
+    fn from(value: [u8; Self::SIZE]) -> Self {
+        let mut hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::zero_filled();
+        // Unsafe: the hex string is guaranteed to be valid UTF-8
+        unsafe { const_hex::encode_to_slice(value, hex.as_bytes_mut()) }
+            .expect("hex string fits in ArrayString");
+        Self(value, hex)
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for SimplePseudonym {
     type Error = GeneralError;
 
@@ -977,21 +1021,16 @@ impl<'a> TryFrom<&'a [u8]> for SimplePseudonym {
             .try_into()
             .map_err(|_| ParseError("SimplePseudonym".into()))?;
 
-        let mut hex = arrayvec::ArrayString::<{ Self::SIZE * 2 }>::zero_filled();
-        // Unsafe: the hex string is guaranteed to be valid UTF-8
-        unsafe { const_hex::encode_to_slice(arr, hex.as_bytes_mut()) }
-            .expect("hex string fits in ArrayString");
-
-        Ok(Self(arr, hex))
+        Ok(arr.into())
     }
 }
 
 impl Randomizable for SimplePseudonym {
     /// Generates a random pseudonym.
     fn random() -> Self {
-        let mut data = vec![0u8; Self::SIZE];
+        let mut data = [0u8; Self::SIZE];
         crate::crypto_random::random_fill(&mut data);
-        Self::try_from(data.as_slice()).unwrap()
+        data.into()
     }
 }
 
@@ -1217,6 +1256,24 @@ mod tests {
         let bytes = hex!("0102030405060708090a");
         let pseudonym = SimplePseudonym::try_from(bytes.as_ref())?;
 
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&pseudonym, &mut serialized)?;
+        let found = serialized.windows(bytes.len()).any(|w| w == bytes);
+        assert!(
+            found,
+            "serialized bytes should contain original bytes, got {:02x?}",
+            serialized
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_serialize_contains_bytes_postcard() -> anyhow::Result<()> {
+        let bytes = hex!("0102030405060708090a");
+        let pseudonym = SimplePseudonym::try_from(bytes.as_ref())?;
+
         let serialized = postcard::to_allocvec(&pseudonym)?;
         let found = serialized.windows(bytes.len()).any(|w| w == bytes);
         assert!(
@@ -1233,6 +1290,27 @@ mod tests {
     fn test_simple_pseudonym_roundtrip() -> anyhow::Result<()> {
         let original = SimplePseudonym::random();
 
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&original, &mut serialized)?;
+        let deserialized: SimplePseudonym = ciborium::de::from_reader(&serialized[..])?;
+
+        assert_eq!(original, deserialized, "roundtrip should preserve value");
+        let original_bytes: &[u8] = original.as_ref();
+        let deserialized_bytes: &[u8] = deserialized.as_ref();
+        assert_eq!(original_bytes, deserialized_bytes, "bytes should match");
+
+        let original_hex: &str = AsRef::<str>::as_ref(&original);
+        let deserialized_hex: &str = AsRef::<str>::as_ref(&deserialized);
+        assert_eq!(original_hex, deserialized_hex, "hex strings should match");
+
+        Ok(())
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_roundtrip_postcard() -> anyhow::Result<()> {
+        let original = SimplePseudonym::random();
+
         let serialized = postcard::to_allocvec(&original)?;
         let deserialized: SimplePseudonym = postcard::from_bytes(&serialized)?;
 
@@ -1246,6 +1324,71 @@ mod tests {
         assert_eq!(original_hex, deserialized_hex, "hex strings should match");
 
         Ok(())
+    }
+
+    /// Test deserialization from CBOR byte array (visit_seq path)
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_from_cbor_array() -> anyhow::Result<()> {
+        let bytes = hex!("0102030405060708090a");
+
+        // CBOR array encoding: major type 0x80 (array) with 10 integer elements
+        // 0x8a = 0x80 + 10 (array of 10 items), followed by CBOR-encoded integers
+        let mut cbor_array = vec![0x8a]; // 0x80 + 10 = 0x8a (array of 10 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let deserialized: SimplePseudonym = ciborium::de::from_reader(&cbor_array[..])?;
+        assert_eq!(AsRef::<str>::as_ref(&deserialized), "0102030405060708090a");
+
+        Ok(())
+    }
+
+    /// Test error case: wrong length in visit_bytes
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_wrong_length() {
+        let bytes = hex!("0102030405"); // Only 5 bytes, not 10
+
+        let mut serialized = Vec::new();
+        ciborium::ser::into_writer(&bytes, &mut serialized).unwrap();
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&serialized[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for wrong length"
+        );
+    }
+
+    /// Test error case: sequence too long in visit_seq
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_seq_too_long() {
+        // CBOR array with 11 bytes (too long)
+        let bytes = [0u8; 11];
+        let mut cbor_array = vec![0x8b]; // 0x80 + 11 = 0x8b (array of 11 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&cbor_array[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for sequence too long"
+        );
+    }
+
+    /// Test error case: sequence too short in visit_seq
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_simple_pseudonym_deserialize_seq_too_short() {
+        // CBOR array with 5 bytes (too short)
+        let bytes = hex!("0102030405");
+        let mut cbor_array = vec![0x85]; // 0x80 + 5 = 0x85 (array of 5 items)
+        cbor_array.extend_from_slice(&bytes);
+
+        let result: Result<SimplePseudonym, _> = ciborium::de::from_reader(&cbor_array[..]);
+        assert!(
+            result.is_err(),
+            "deserialization should fail for sequence too short"
+        );
     }
 
     #[test]
