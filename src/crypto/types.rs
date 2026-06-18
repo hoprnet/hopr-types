@@ -938,7 +938,9 @@ impl<'de> serde::Deserialize<'de> for SimplePseudonym {
 
                 // Also fail if we got too few elements
                 if index < SimplePseudonym::SIZE {
-                    return Err(serde::de::Error::custom("SimplePseudonym sequence too short"));
+                    return Err(serde::de::Error::custom(
+                        "SimplePseudonym sequence too short",
+                    ));
                 }
 
                 Ok(buffer.into())
