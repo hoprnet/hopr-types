@@ -168,6 +168,12 @@ impl From<SecretValue<typenum::U32>> for [u8; 32] {
     }
 }
 
+impl<L: ArrayLength> std::fmt::Debug for SecretValue<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SecretValue").field(&"<redacted>").finish()
+    }
+}
+
 #[cfg(feature = "serde")]
 impl<L: ArrayLength> serde::Serialize for SecretValue<L> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
