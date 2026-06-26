@@ -13,6 +13,9 @@ pub mod primitives;
 /// Defines commonly used traits across the entire code base.
 pub mod traits;
 
+/// Re-exports of the `typenum` crate.
+pub use typenum;
+
 /// Approximately compares two double-precision floats.
 ///
 /// This function first tests if the two values relatively differ by at least `epsilon`.
