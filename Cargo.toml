@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.9.4"
+version = "1.10.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -46,6 +46,7 @@ crypto = [
   "dep:arrayvec",
   "dep:aes",
   "dep:blake3",
+  "dep:babyjubjub-ec",
   "dep:chacha20",
   "dep:cipher",
   "dep:ctr",
@@ -113,6 +114,7 @@ anyhow = { version = "1.0.102", optional = true }
 aquamarine = { version = "0.6.0", optional = true }
 arrayvec = { version = "0.7.6", optional = true }
 async-trait = { version = "0.1.89", optional = true }
+babyjubjub-ec = { version = "0.3.1", optional = true }
 bigdecimal = { version = "0.4.10", optional = true }
 blake3 = { version = "=1.8.3", optional = true, features = ["traits-preview"] }
 chacha20 = { version = "0.9.1", optional = true }

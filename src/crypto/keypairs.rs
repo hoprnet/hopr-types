@@ -1,12 +1,13 @@
 use std::fmt::Debug;
 
-use crate::crypto_random::random_bytes;
+use crate::crypto_random::{Randomizable, random_bytes};
 use crate::primitive::prelude::*;
 use digest::Digest;
 use generic_array::{ArrayLength, GenericArray};
 use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
 
+use crate::crypto::types::BjjPublicKey;
 use crate::crypto::{
     errors,
     errors::CryptoError::InvalidInputValue,
@@ -44,7 +45,7 @@ pub trait Keypair: ConstantTimeEq + Sized {
 }
 
 /// Represents a keypair consisting of an Ed25519 private and public key
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OffchainKeypair(SecretValue<typenum::U32>, OffchainPublicKey);
 
 impl Keypair for OffchainKeypair {
@@ -69,12 +70,6 @@ impl Keypair for OffchainKeypair {
 
     fn public(&self) -> &Self::Public {
         &self.1
-    }
-}
-
-impl Debug for OffchainKeypair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("OffchainKeypair").field(&self.1).finish()
     }
 }
 
@@ -114,7 +109,7 @@ impl From<&OffchainKeypair> for libp2p_identity::PeerId {
 }
 
 /// Represents a keypair consisting of a secp256k1 private and public key
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChainKeypair(SecretValue<typenum::U32>, PublicKey);
 
 impl Keypair for ChainKeypair {
@@ -144,13 +139,6 @@ impl Keypair for ChainKeypair {
     }
 }
 
-impl Debug for ChainKeypair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Do not expose the private key
-        f.debug_tuple("ChainKeypair").field(&self.1).finish()
-    }
-}
-
 impl ConstantTimeEq for ChainKeypair {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.secret().ct_eq(other.secret())
@@ -159,7 +147,8 @@ impl ConstantTimeEq for ChainKeypair {
 
 impl From<&ChainKeypair> for k256::Scalar {
     fn from(value: &ChainKeypair) -> Self {
-        k256_scalar_from_bytes(value.0.as_ref()).unwrap() // cannot happen, secret always represents a valid scalar
+        k256_scalar_from_bytes(value.0.as_ref())
+            .expect("chain keypair must always have valid scalar")
     }
 }
 
@@ -172,6 +161,50 @@ impl From<&ChainKeypair> for Address {
 impl AsRef<Address> for ChainKeypair {
     fn as_ref(&self) -> &Address {
         self.public().as_ref()
+    }
+}
+
+/// Represents a keypair consisting of a Baby JubJub private and public keys.
+#[derive(Clone, Debug)]
+pub struct BjjKeypair(SecretValue<typenum::U32>, BjjPublicKey);
+
+impl Keypair for BjjKeypair {
+    type Public = BjjPublicKey;
+    type SecretLen = typenum::U32;
+
+    fn random() -> Self {
+        // Use rejection sampling to generate a valid random secret key
+        let mut ret = Self::from_secret(SecretValue::<typenum::U32>::random().as_ref());
+        while ret.is_err() {
+            ret = Self::from_secret(SecretValue::<typenum::U32>::random().as_ref());
+        }
+
+        // Not error at this point
+        ret.unwrap()
+    }
+
+    fn from_secret(bytes: &[u8]) -> errors::Result<Self> {
+        BjjPublicKey::from_privkey(bytes).and_then(|pub_key| Ok(Self(bytes.try_into()?, pub_key)))
+    }
+
+    fn secret(&self) -> &SecretValue<Self::SecretLen> {
+        &self.0
+    }
+
+    fn public(&self) -> &Self::Public {
+        &self.1
+    }
+}
+
+impl ConstantTimeEq for BjjKeypair {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.secret().ct_eq(other.secret())
+    }
+}
+
+impl From<&BjjKeypair> for BjjPublicKey {
+    fn from(value: &BjjKeypair) -> Self {
+        *value.public()
     }
 }
 
@@ -240,6 +273,46 @@ mod tests {
         );
 
         let kp_2 = ChainKeypair::from_secret(kp_1.secret().as_ref()).unwrap();
+        assert_eq!(
+            kp_1.ct_eq(&kp_2).unwrap_u8(),
+            1,
+            "keypairs generated from secrets must be equal"
+        );
+        assert_eq!(
+            &public,
+            kp_2.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            kp_1.public(),
+            kp_2.public(),
+            "keypair public keys must be equal"
+        );
+
+        let (s1, p1) = kp_1.unzip();
+        let (s2, p2) = kp_2.unzip();
+
+        assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
+        assert_eq!(p1, p2);
+    }
+
+    #[test]
+    fn test_bjj_keypair() {
+        let kp_1 = BjjKeypair::random();
+
+        let public = BjjPublicKey::from_privkey(kp_1.secret().as_ref()).unwrap();
+        assert_eq!(
+            &public,
+            kp_1.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            public,
+            BjjPublicKey::from(&kp_1),
+            "secret keys must yield compatible public keys"
+        );
+
+        let kp_2 = BjjKeypair::from_secret(kp_1.secret().as_ref()).unwrap();
         assert_eq!(
             kp_1.ct_eq(&kp_2).unwrap_u8(),
             1,
