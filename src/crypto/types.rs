@@ -593,7 +593,7 @@ impl BjjPublicKey {
                 .map_err(|_| CryptoError::InvalidSecretScalar)?),
         )
         .into_option()
-        .ok_or_else(|| CryptoError::InvalidSecretScalar)?;
+        .ok_or(CryptoError::InvalidSecretScalar)?;
 
         let point = babyjubjub_ec::ProjectivePoint::GENERATOR * scalar;
         point.try_into()
