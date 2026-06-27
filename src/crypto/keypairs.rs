@@ -163,6 +163,7 @@ impl AsRef<Address> for ChainKeypair {
     }
 }
 
+/// Represents a keypair consisting of a Baby JubJub private and public keys.
 #[derive(Clone, Debug)]
 pub struct BjjKeypair(SecretValue<typenum::U32>, BjjPublicKey);
 
