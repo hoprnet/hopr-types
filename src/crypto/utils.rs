@@ -168,6 +168,12 @@ impl From<SecretValue<typenum::U32>> for [u8; 32] {
     }
 }
 
+impl From<[u8; 32]> for SecretValue<typenum::U32> {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value.into())
+    }
+}
+
 impl<L: ArrayLength> std::fmt::Debug for SecretValue<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("SecretValue").field(&"<redacted>").finish()

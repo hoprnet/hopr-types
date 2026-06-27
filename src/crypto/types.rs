@@ -1,15 +1,3 @@
-use std::{
-    cmp::Ordering,
-    fmt::{Debug, Display, Formatter},
-    hash,
-    hash::Hasher,
-    marker::PhantomData,
-    result,
-    str::FromStr,
-};
-
-use crate::crypto_random::Randomizable;
-use crate::primitive::{errors::GeneralError::ParseError, prelude::*};
 use cipher::crypto_common::OutputSizeUser;
 use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
@@ -27,6 +15,18 @@ use k256::{
     },
 };
 use libp2p_identity::PeerId;
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display, Formatter},
+    hash,
+    hash::Hasher,
+    marker::PhantomData,
+    result,
+    str::FromStr,
+};
+
+use crate::crypto_random::Randomizable;
+use crate::primitive::{errors::GeneralError::ParseError, prelude::*};
 
 use crate::crypto::{
     errors::{
@@ -578,6 +578,124 @@ impl From<&OffchainPublicKey> for MontgomeryPoint {
     }
 }
 
+/// Implements a public key for the Baby Jubjub curve.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BjjPublicKey(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
+
+impl BjjPublicKey {
+    pub fn from_privkey(secret: &[u8]) -> Result<Self> {
+        let scalar = babyjubjub_ec::Scalar::from_bytes(
+            &(secret
+                .try_into()
+                .map_err(|_| CryptoError::InvalidSecretScalar)?),
+        )
+        .into_option()
+        .ok_or_else(|| CryptoError::InvalidSecretScalar)?;
+
+        let point = babyjubjub_ec::ProjectivePoint::GENERATOR * scalar;
+        point.try_into()
+    }
+}
+
+impl Display for BjjPublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+impl FromStr for BjjPublicKey {
+    type Err = GeneralError;
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
+impl AsRef<[u8]> for BjjPublicKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for BjjPublicKey {
+    type Error = GeneralError;
+    fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
+        if value.len() != Self::SIZE {
+            return Err(ParseError("BjjPublicKey".into()));
+        }
+
+        let repr_bytes: [u8; 32] = value
+            .try_into()
+            .map_err(|_| ParseError("BjjPublicKey".into()))?;
+
+        use babyjubjub_ec::group::GroupEncoding;
+        if babyjubjub_ec::ProjectivePoint::from_bytes(&babyjubjub_ec::GroupRepr(repr_bytes))
+            .into_option()
+            .is_none_or(|p| p.is_identity() || !p.is_in_prime_order_subgroup())
+        {
+            return Err(ParseError("BjjPublicKey".into()));
+        }
+
+        Ok(Self(repr_bytes))
+    }
+}
+
+impl BytesRepresentable for BjjPublicKey {
+    const SIZE: usize = 32;
+}
+
+impl TryFrom<&babyjubjub_ec::ProjectivePoint> for BjjPublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &babyjubjub_ec::ProjectivePoint) -> result::Result<Self, Self::Error> {
+        if value.is_identity() || !value.is_in_prime_order_subgroup() {
+            return Err(CryptoError::InvalidPublicKey);
+        }
+
+        use babyjubjub_ec::group::GroupEncoding;
+        Ok(Self(value.to_bytes().0))
+    }
+}
+
+impl TryFrom<babyjubjub_ec::ProjectivePoint> for BjjPublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: babyjubjub_ec::ProjectivePoint) -> result::Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl From<&BjjPublicKey> for babyjubjub_ec::ProjectivePoint {
+    fn from(value: &BjjPublicKey) -> babyjubjub_ec::ProjectivePoint {
+        use babyjubjub_ec::group::GroupEncoding;
+        babyjubjub_ec::ProjectivePoint::from_bytes(&babyjubjub_ec::GroupRepr(value.0))
+            .expect("BjjPublicKey is always valid")
+    }
+}
+
+impl From<BjjPublicKey> for babyjubjub_ec::ProjectivePoint {
+    fn from(value: BjjPublicKey) -> babyjubjub_ec::ProjectivePoint {
+        (&value).into()
+    }
+}
+
+impl TryFrom<&babyjubjub_ec::AffinePoint> for BjjPublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &babyjubjub_ec::AffinePoint) -> result::Result<Self, Self::Error> {
+        (&babyjubjub_ec::ProjectivePoint::from(value)).try_into()
+    }
+}
+
+impl TryFrom<babyjubjub_ec::AffinePoint> for BjjPublicKey {
+    type Error = CryptoError;
+    fn try_from(value: babyjubjub_ec::AffinePoint) -> result::Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
 /// Length of a packet tag
 pub const PACKET_TAG_LENGTH: usize = 16;
 
@@ -1046,6 +1164,8 @@ mod tests {
     use k256::AffinePoint;
     use libp2p_identity::PeerId;
 
+    use crate::crypto::prelude::BjjKeypair;
+    use crate::crypto::types::BjjPublicKey;
     use crate::crypto::{
         keypairs::{Keypair, OffchainKeypair},
         types::{
@@ -1141,6 +1261,22 @@ mod tests {
 
         let pk3 = OffchainPublicKey::try_from(pk1.as_ref())?;
         assert_eq!(pk1, pk3, "from bytes failed");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bjj_public_key() -> anyhow::Result<()> {
+        let (s, pk1) = BjjKeypair::random().unzip();
+
+        let pk2 = BjjPublicKey::from_privkey(s.as_ref())?;
+        assert_eq!(pk1, pk2, "from privkey failed");
+
+        let pk3 = BjjPublicKey::try_from(pk1.as_ref())?;
+        assert_eq!(pk1, pk3, "from bytes failed");
+
+        // Must reject identity point
+        assert!(BjjPublicKey::try_from(babyjubjub_ec::ProjectivePoint::IDENTITY).is_err());
 
         Ok(())
     }
