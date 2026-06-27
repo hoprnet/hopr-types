@@ -147,7 +147,8 @@ impl ConstantTimeEq for ChainKeypair {
 
 impl From<&ChainKeypair> for k256::Scalar {
     fn from(value: &ChainKeypair) -> Self {
-        k256_scalar_from_bytes(value.0.as_ref()).unwrap() // cannot happen, secret always represents a valid scalar
+        k256_scalar_from_bytes(value.0.as_ref())
+            .expect("chain keypair must always have valid scalar")
     }
 }
 
@@ -198,6 +199,12 @@ impl Keypair for BjjKeypair {
 impl ConstantTimeEq for BjjKeypair {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.secret().ct_eq(other.secret())
+    }
+}
+
+impl From<&BjjKeypair> for BjjPublicKey {
+    fn from(value: &BjjKeypair) -> Self {
+        *value.public()
     }
 }
 
@@ -297,6 +304,11 @@ mod tests {
         assert_eq!(
             &public,
             kp_1.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            public,
+            BjjPublicKey::from(&kp_1),
             "secret keys must yield compatible public keys"
         );
 
