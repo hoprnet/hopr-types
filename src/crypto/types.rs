@@ -1156,13 +1156,12 @@ impl Pseudonym for SimplePseudonym {}
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use crate::crypto_random::Randomizable;
     use crate::primitive::prelude::*;
     use hex_literal::hex;
     use k256::AffinePoint;
     use libp2p_identity::PeerId;
+    use std::str::FromStr;
 
     use crate::crypto::prelude::BjjKeypair;
     use crate::crypto::types::BjjPublicKey;
@@ -1275,8 +1274,13 @@ mod tests {
         let pk3 = BjjPublicKey::try_from(pk1.as_ref())?;
         assert_eq!(pk1, pk3, "from bytes failed");
 
+        assert_eq!(BjjPublicKey::from_str(&pk1.to_string())?, pk1);
+
         // Must reject identity point
         assert!(BjjPublicKey::try_from(babyjubjub_ec::ProjectivePoint::IDENTITY).is_err());
+
+        let proj: babyjubjub_ec::ProjectivePoint = pk1.into();
+        assert_eq!(BjjPublicKey::try_from(proj)?, pk1);
 
         Ok(())
     }
