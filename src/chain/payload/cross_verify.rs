@@ -10,7 +10,9 @@
 use multiaddr::Multiaddr;
 use std::str::FromStr;
 
-use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET};
+use crate::chain::payload::tests::{
+    CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
+};
 use crate::chain::payload::{PayloadGenerator, SignableTransaction, bindings_based, static_based};
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;

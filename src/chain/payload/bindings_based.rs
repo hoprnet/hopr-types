@@ -719,7 +719,9 @@ pub(crate) mod tests {
     use multiaddr::Multiaddr;
 
     use super::{BasicPayloadGenerator, SafePayloadGenerator};
-    use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET};
+    use crate::chain::payload::tests::{
+        CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
+    };
     use crate::chain::payload::{PayloadGenerator, SignableTransaction};
 
     lazy_static::lazy_static! {
