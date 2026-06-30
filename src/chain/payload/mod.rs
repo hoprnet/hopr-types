@@ -3,20 +3,36 @@
 //! This module defines the basic `PayloadGenerator` trait that describes how an action
 //! is translated into a `TransactionRequest` that can be submitted on-chain.
 //!
-//! There are two main implementations:
-//! - `BasicPayloadGenerator` which implements generation of a direct EIP1559 transaction payload. This is currently
-//!   not used by a HOPR node.
-//! - `SafePayloadGenerator` which implements generation of a payload that embeds the transaction data into the SAFE
-//!   transaction. This is currently the main mode of HOPR node operation.
-//!
-//! These are currently based on the `hopr-bindings` crate.
+//! There are two implementations:
+//! - `static_based`: the default implementation that uses manual ABI encoding and k256
+//!   EIP-1559 signing. It has **no dependency on `hopr-bindings` or alloy** and is always
+//!   compiled when the `chain` feature is active (without `use-bindings`).
+//! - `bindings_based`: the legacy alloy-backed implementation, compiled only when the
+//!   `use-bindings` feature is enabled. Its tests verify correctness of the static
+//!   implementation by cross-checking against the alloy-generated payloads.
 
+// Static (no-alloy) implementation — always compiled when chain is enabled so that
+// cross-verification tests under `use-bindings` can use both implementations at once.
+mod static_based;
+
+// Alloy / hopr-bindings backed implementation (kept for backward compatibility and
+// for cross-verification tests).
 #[cfg(feature = "use-bindings")]
 mod bindings_based;
+
+// Cross-verification tests that compare full signed transactions from both implementations.
+#[cfg(test)]
+mod cross_verify;
 
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
 use crate::primitive::prelude::*;
+
+// Re-exports for the static implementation (only when bindings are absent).
+#[cfg(not(feature = "use-bindings"))]
+pub use static_based::{BasicPayloadGenerator, SafePayloadGenerator, TransactionRequest};
+
+// Re-exports for the bindings-based implementation (legacy / backward compat).
 #[cfg(feature = "use-bindings")]
 pub(crate) use bindings_based::KeyBindAndAnnouncePayload;
 #[cfg(feature = "use-bindings")]
