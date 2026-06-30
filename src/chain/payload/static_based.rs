@@ -1,6 +1,6 @@
 //! Payload generators using manual ABI encoding.
 //!
-//! Function selectors are computed via `sha3::Keccak256` for EIP-1559 transactions signing. 
+//! Function selectors are computed via `sha3::Keccak256` for EIP-1559 transactions signing.
 //! The `bindings_based` module is kept as a test module to verify correctness of every encoded payload.
 
 // When `use-bindings` is active this module's types are not re-exported (bindings-based
@@ -164,17 +164,11 @@ fn encode_send(recipient: [u8; 20], amount: &[u8; 32], data: &[u8]) -> Vec<u8> {
 }
 
 fn encode_register_safe_by_node(safe_addr: [u8; 20]) -> Vec<u8> {
-    static_call(
-        sel("registerSafeByNode(address)"),
-        &[addr32(safe_addr)],
-    )
+    static_call(sel("registerSafeByNode(address)"), &[addr32(safe_addr)])
 }
 
 fn encode_deregister_node_by_safe(node_addr: [u8; 20]) -> Vec<u8> {
-    static_call(
-        sel("deregisterNodeBySafe(address)"),
-        &[addr32(node_addr)],
-    )
+    static_call(sel("deregisterNodeBySafe(address)"), &[addr32(node_addr)])
 }
 
 /// Gnosis Safe module: `execTransactionFromModule(address,uint256,bytes,uint8)`.
@@ -183,7 +177,9 @@ fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
     let offset = 4usize * 32; // 4 head slots → offset = 128
     let tail = abi_dyn_tail(call_data);
     let mut out = Vec::with_capacity(4 + 4 * 32 + tail.len());
-    out.extend_from_slice(&sel("execTransactionFromModule(address,uint256,bytes,uint8)"));
+    out.extend_from_slice(&sel(
+        "execTransactionFromModule(address,uint256,bytes,uint8)",
+    ));
     out.extend_from_slice(&addr32(to));
     out.extend_from_slice(&[0u8; 32]); // value = 0
     out.extend_from_slice(&word_usize(offset));
@@ -201,7 +197,11 @@ fn encode_fund_channel(account: [u8; 20], amount_96: &[u8; 12]) -> Vec<u8> {
     )
 }
 
-fn encode_fund_channel_safe(self_addr: [u8; 20], account: [u8; 20], amount_96: &[u8; 12]) -> Vec<u8> {
+fn encode_fund_channel_safe(
+    self_addr: [u8; 20],
+    account: [u8; 20],
+    amount_96: &[u8; 12],
+) -> Vec<u8> {
     let mut amount_word = [0u8; 32];
     amount_word[20..].copy_from_slice(amount_96);
     static_call(
@@ -331,8 +331,22 @@ fn redeem_ticket_words(
     hvy.copy_from_slice(&hv_bytes[33..65]);
 
     Ok([
-        channel_id, amount_word, index_word, epoch_word, win_prob_word, r, vs, por_secret, vx, vy,
-        s_w, h_w, sbx, sby, hvx, hvy,
+        channel_id,
+        amount_word,
+        index_word,
+        epoch_word,
+        win_prob_word,
+        r,
+        vs,
+        por_secret,
+        vx,
+        vy,
+        s_w,
+        h_w,
+        sbx,
+        sby,
+        hvx,
+        hvy,
     ])
 }
 
@@ -580,20 +594,11 @@ impl PayloadGenerator for BasicPayloadGenerator {
             .map(ToString::to_string)
             .unwrap_or_default();
 
-        let inner = encode_key_bind_announce_body(
-            self.me.into(),
-            &sig0,
-            &sig1,
-            &pub_key,
-            &multiaddr_str,
-        );
+        let inner =
+            encode_key_bind_announce_body(self.me.into(), &sig0, &sig1, &pub_key, &multiaddr_str);
 
         let fee_word = u256_from_balance(&key_binding_fee);
-        let call_data = encode_send(
-            self.contract_addrs.announcements.into(),
-            &fee_word,
-            &inner,
-        );
+        let call_data = encode_send(self.contract_addrs.announcements.into(), &fee_word, &inner);
 
         Ok(TransactionRequest::default()
             .with_input(call_data)
@@ -681,8 +686,7 @@ impl PayloadGenerator for BasicPayloadGenerator {
         };
         let default_target = make_default_target(self.contract_addrs.channels.into());
         let admins_raw: Vec<[u8; 20]> = admins.iter().map(|a| (*a).into()).collect();
-        let user_data =
-            encode_user_data_body(&function_id, &nonce, &default_target, &admins_raw);
+        let user_data = encode_user_data_body(&function_id, &nonce, &default_target, &admins_raw);
         let balance_word = u256_from_balance(&balance);
         let tx_payload = encode_send(
             self.contract_addrs.node_stake_factory.into(),
@@ -706,7 +710,11 @@ pub struct SafePayloadGenerator {
 }
 
 impl SafePayloadGenerator {
-    pub fn new(chain_keypair: &ChainKeypair, contract_addrs: ContractAddresses, module: Address) -> Self {
+    pub fn new(
+        chain_keypair: &ChainKeypair,
+        contract_addrs: ContractAddresses,
+        module: Address,
+    ) -> Self {
         Self {
             me: chain_keypair.into(),
             contract_addrs,
@@ -768,23 +776,13 @@ impl PayloadGenerator for SafePayloadGenerator {
             .map(ToString::to_string)
             .unwrap_or_default();
 
-        let inner = encode_key_bind_announce_body(
-            self.me.into(),
-            &sig0,
-            &sig1,
-            &pub_key,
-            &multiaddr_str,
-        );
+        let inner =
+            encode_key_bind_announce_body(self.me.into(), &sig0, &sig1, &pub_key, &multiaddr_str);
 
         let fee_word = u256_from_balance(&key_binding_fee);
-        let send_call = encode_send(
-            self.contract_addrs.announcements.into(),
-            &fee_word,
-            &inner,
-        );
+        let send_call = encode_send(self.contract_addrs.announcements.into(), &fee_word, &inner);
 
-        let module_call =
-            encode_exec_from_module(self.contract_addrs.token.into(), &send_call);
+        let module_call = encode_exec_from_module(self.contract_addrs.token.into(), &send_call);
 
         Ok(TransactionRequest::default()
             .with_input(module_call)
@@ -839,10 +837,8 @@ impl PayloadGenerator for SafePayloadGenerator {
                 "Cannot initiate closure of incoming channel to self",
             ));
         }
-        let call_data = encode_initiate_outgoing_channel_closure_safe(
-            self.me.into(),
-            destination.into(),
-        );
+        let call_data =
+            encode_initiate_outgoing_channel_closure_safe(self.me.into(), destination.into());
         Ok(TransactionRequest::default()
             .with_input(encode_exec_from_module(
                 self.contract_addrs.channels.into(),
@@ -861,10 +857,8 @@ impl PayloadGenerator for SafePayloadGenerator {
                 "Cannot initiate closure of incoming channel to self",
             ));
         }
-        let call_data = encode_finalize_outgoing_channel_closure_safe(
-            self.me.into(),
-            destination.into(),
-        );
+        let call_data =
+            encode_finalize_outgoing_channel_closure_safe(self.me.into(), destination.into());
         Ok(TransactionRequest::default()
             .with_input(encode_exec_from_module(
                 self.contract_addrs.channels.into(),
@@ -930,26 +924,18 @@ fn u256_from_balance(balance: &HoprBalance) -> [u8; 32] {
 mod tests {
     use std::str::FromStr;
 
-    use hex_literal::hex;
     use multiaddr::Multiaddr;
 
     use super::{BasicPayloadGenerator, SafePayloadGenerator};
-    use crate::chain::payload::{PayloadGenerator, SignableTransaction, tests::CONTRACT_ADDRS};
+    use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET};
+    use crate::chain::payload::{PayloadGenerator, SignableTransaction};
     use crate::crypto::prelude::*;
     use crate::internal::prelude::*;
     use crate::primitive::prelude::*;
 
-    const PRIVATE_KEY_1: [u8; 32] =
-        hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
-    const PRIVATE_KEY_2: [u8; 32] =
-        hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
-
     lazy_static::lazy_static! {
-        static ref REDEEMABLE_TICKET: RedeemableTicket = postcard::from_bytes(&hex!(
-            "bea83ba0fcee21da44a30c893f466e6bf0c29bbb0530783365387bffffffffffffff010000000000000000000000000000000000000000014038536c412ff92c3b070d98724a2ac167b7a914aa2151cf71eea3d192b0df195d0184aa92c73bccb27aded5f27fcd1cdcf65889f78cf2e62d2f630f659aa2fba220cba79e6dc2ea1205cb76833c9223cd912f056f3406d73d0d689602afe5e88abc668430def9eacd2b5064acf85d73fb0b351a1c8c20d7f3fa28f0caa757e81226e1ee86a9efdbe7991442286183797296ebaa4d292a2005a089ed04b7dbb28ad1c9074f13d10115b0002ca88f4d68ce14549099773c192103d14016cbfa555574e8a5a8fbcb52677dfb7e9267e99c05ebe29603e41b33327705ddecfc569b0125d1ae9a3d3cb637a3c8c9eaafe90e6a1877292227065fbdcc897e95962ce1604fb644782e9029a046650ed84c4f1043b753959d7819f53cec200000000000000000000000000000000000000000000000000000000000000000"
-        )).unwrap();
+        static ref CONTRACT_ADDRS: crate::chain::ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
     }
-
     #[tokio::test]
     async fn test_announce() -> anyhow::Result<()> {
         let test_multiaddr = Multiaddr::from_str("/ip4/1.2.3.4/tcp/56")?;
