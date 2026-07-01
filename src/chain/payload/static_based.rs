@@ -205,11 +205,7 @@ fn encode_fund_channel_safe(
 ) -> Vec<u8> {
     static_call(
         sel("fundChannelSafe(address,address,uint96)"),
-        &[
-            addr32(self_addr),
-            addr32(account),
-            right_align32(amount_96),
-        ],
+        &[addr32(self_addr), addr32(account), right_align32(amount_96)],
     )
 }
 
@@ -423,7 +419,8 @@ fn transfer_tx<C: Currency>(
     if XDai::is::<C>() {
         Ok(TransactionRequest::default().with_value(amount_word))
     } else if WxHOPR::is::<C>() {
-        Ok(TransactionRequest::default().with_input(encode_transfer(destination.into(), &amount_word)))
+        Ok(TransactionRequest::default()
+            .with_input(encode_transfer(destination.into(), &amount_word)))
     } else {
         Err(InvalidArguments("invalid currency"))
     }
@@ -802,8 +799,7 @@ impl PayloadGenerator for SafePayloadGenerator {
                 "cannot fund channel with amount larger than MAX_FUNDING_AMOUNT",
             ));
         }
-        let call_data =
-            encode_fund_channel_safe(self.me.into(), dest.into(), &amount_96(&amount));
+        let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), &amount_96(&amount));
         Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
