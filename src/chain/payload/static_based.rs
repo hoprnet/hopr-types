@@ -91,18 +91,21 @@ fn sel(sig: &str) -> [u8; 4] {
     [h[0], h[1], h[2], h[3]]
 }
 
+/// Right-aligns a big-endian byte slice (at most 32 bytes) into a zero-padded 32-byte word.
+fn right_align32(data: &[u8]) -> [u8; 32] {
+    let mut w = [0u8; 32];
+    w[32 - data.len()..].copy_from_slice(data);
+    w
+}
+
 /// ABI-encodes an address as 32 bytes (left-zero-padded).
 fn addr32(a: [u8; 20]) -> [u8; 32] {
-    let mut b = [0u8; 32];
-    b[12..].copy_from_slice(&a);
-    b
+    right_align32(&a)
 }
 
 /// Converts a usize to a 32-byte big-endian word (for offsets / lengths).
 fn word_usize(v: usize) -> [u8; 32] {
-    let mut b = [0u8; 32];
-    b[24..].copy_from_slice(&(v as u64).to_be_bytes());
-    b
+    right_align32(&(v as u64).to_be_bytes())
 }
 
 /// ABI-encodes a `bytes` dynamic type: length word followed by zero-padded data.
@@ -189,11 +192,9 @@ fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
 }
 
 fn encode_fund_channel(account: [u8; 20], amount_96: &[u8; 12]) -> Vec<u8> {
-    let mut amount_word = [0u8; 32];
-    amount_word[20..].copy_from_slice(amount_96);
     static_call(
         sel("fundChannel(address,uint96)"),
-        &[addr32(account), amount_word],
+        &[addr32(account), right_align32(amount_96)],
     )
 }
 
@@ -202,11 +203,13 @@ fn encode_fund_channel_safe(
     account: [u8; 20],
     amount_96: &[u8; 12],
 ) -> Vec<u8> {
-    let mut amount_word = [0u8; 32];
-    amount_word[20..].copy_from_slice(amount_96);
     static_call(
         sel("fundChannelSafe(address,address,uint96)"),
-        &[addr32(self_addr), addr32(account), amount_word],
+        &[
+            addr32(self_addr),
+            addr32(account),
+            right_align32(amount_96),
+        ],
     )
 }
 
@@ -272,29 +275,22 @@ fn redeem_ticket_words(
     let channel_id: [u8; 32] = *<&[u8; 32]>::try_from(acked_ticket.ticket.channel_id().as_ref())
         .map_err(|_| InvalidArguments("channel_id length"))?;
     let amount_src = acked_ticket.verified_ticket().amount.amount().to_be_bytes();
-    let mut amount_word = [0u8; 32];
-    amount_word[20..].copy_from_slice(&amount_src[32 - 12..]);
+    let amount_word = right_align32(&amount_src[32 - 12..]);
 
     let index_src = acked_ticket.verified_ticket().index.to_be_bytes();
-    let mut index_word = [0u8; 32];
-    index_word[26..].copy_from_slice(&index_src[8 - 6..]);
+    let index_word = right_align32(&index_src[8 - 6..]);
 
     let epoch_src = acked_ticket.verified_ticket().channel_epoch.to_be_bytes();
-    let mut epoch_word = [0u8; 32];
-    epoch_word[29..].copy_from_slice(&epoch_src[4 - 3..]);
+    let epoch_word = right_align32(&epoch_src[4 - 3..]);
 
-    let mut win_prob_word = [0u8; 32];
-    win_prob_word[25..].copy_from_slice(&acked_ticket.verified_ticket().encoded_win_prob);
+    let win_prob_word = right_align32(&acked_ticket.verified_ticket().encoded_win_prob);
 
     // CompactSignature
-    let mut r = [0u8; 32];
-    let mut vs = [0u8; 32];
-    r.copy_from_slice(&serialized_sig[0..32]);
-    vs.copy_from_slice(&serialized_sig[32..64]);
+    let r = right_align32(&serialized_sig[0..32]);
+    let vs = right_align32(&serialized_sig[32..64]);
 
     // porSecret
-    let mut por_secret = [0u8; 32];
-    por_secret.copy_from_slice(acked_ticket.response.as_ref());
+    let por_secret = right_align32(acked_ticket.response.as_ref());
 
     // VRFParameters – all computed by our own crypto (no alloy)
     let vp = &acked_ticket.vrf_params;
@@ -312,23 +308,14 @@ fn redeem_ticket_words(
     let hv_pt = vp.get_h_v_witness();
     let hv_bytes = hv_pt.as_bytes();
 
-    let mut vx = [0u8; 32];
-    let mut vy = [0u8; 32];
-    let mut s_w = [0u8; 32];
-    let mut h_w = [0u8; 32];
-    let mut sbx = [0u8; 32];
-    let mut sby = [0u8; 32];
-    let mut hvx = [0u8; 32];
-    let mut hvy = [0u8; 32];
-
-    vx.copy_from_slice(&v_bytes[1..33]);
-    vy.copy_from_slice(&v_bytes[33..65]);
-    s_w.copy_from_slice(vp.s.to_bytes().as_ref());
-    h_w.copy_from_slice(vp.h.to_bytes().as_ref());
-    sbx.copy_from_slice(&sb_bytes[1..33]);
-    sby.copy_from_slice(&sb_bytes[33..65]);
-    hvx.copy_from_slice(&hv_bytes[1..33]);
-    hvy.copy_from_slice(&hv_bytes[33..65]);
+    let vx = right_align32(&v_bytes[1..33]);
+    let vy = right_align32(&v_bytes[33..65]);
+    let s_w = right_align32(vp.s.to_bytes().as_ref());
+    let h_w = right_align32(vp.h.to_bytes().as_ref());
+    let sbx = right_align32(&sb_bytes[1..33]);
+    let sby = right_align32(&sb_bytes[33..65]);
+    let hvx = right_align32(&hv_bytes[1..33]);
+    let hvy = right_align32(&hv_bytes[33..65]);
 
     Ok([
         channel_id,
@@ -420,6 +407,59 @@ fn make_default_target(channels: [u8; 20]) -> [u8; 32] {
     buf[..20].copy_from_slice(&channels);
     buf[20..].copy_from_slice(&CAPABILITY_PERMISSIONS);
     buf
+}
+
+// ─── Shared per-call TransactionRequest builders ──────────────────────────
+
+fn approve_tx(spender: [u8; 20], amount: &[u8; 32]) -> TransactionRequest {
+    TransactionRequest::default().with_input(encode_approve(spender, amount))
+}
+
+fn transfer_tx<C: Currency>(
+    destination: Address,
+    amount: Balance<C>,
+) -> payload::Result<TransactionRequest> {
+    let amount_word = amount.amount().to_be_bytes();
+    if XDai::is::<C>() {
+        Ok(TransactionRequest::default().with_value(amount_word))
+    } else if WxHOPR::is::<C>() {
+        Ok(TransactionRequest::default().with_input(encode_transfer(destination.into(), &amount_word)))
+    } else {
+        Err(InvalidArguments("invalid currency"))
+    }
+}
+
+fn register_safe_tx(safe_addr: [u8; 20]) -> TransactionRequest {
+    TransactionRequest::default().with_input(encode_register_safe_by_node(safe_addr))
+}
+
+/// Truncates a balance's 32-byte big-endian representation to the low 96 bits (`uint96`).
+fn amount_96(balance: &HoprBalance) -> [u8; 12] {
+    let src = balance.amount().to_be_bytes();
+    *<&[u8; 12]>::try_from(&src[32 - 12..]).expect("slice of length 12")
+}
+
+/// Builds the `send(announcements, fee, KeyBindAndAnnouncePayload)` call data shared by both generators.
+fn announce_call_data(
+    me: [u8; 20],
+    announcements: [u8; 20],
+    announcement: &AnnouncementData,
+    key_binding_fee: &HoprBalance,
+) -> Vec<u8> {
+    let sig = announcement.key_binding().signature.as_ref();
+    let sig0 = right_align32(&sig[0..32]);
+    let sig1 = right_align32(&sig[32..64]);
+    let pub_key = right_align32(announcement.key_binding().packet_key.as_ref());
+
+    let multiaddr_str = announcement
+        .multiaddress()
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+
+    let inner = encode_key_bind_announce_body(me, &sig0, &sig1, &pub_key, &multiaddr_str);
+    let fee_word = key_binding_fee.amount().to_be_bytes();
+    encode_send(announcements, &fee_word, &inner)
 }
 
 // ─── TransactionRequest type ──────────────────────────────────────────────
@@ -548,7 +588,7 @@ impl PayloadGenerator for BasicPayloadGenerator {
     type TxRequest = TransactionRequest;
 
     fn approve(&self, spender: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
-        let amount_word = u256_from_balance(&amount);
+        let amount_word = amount.amount().to_be_bytes();
         Ok(TransactionRequest::default()
             .with_input(encode_approve(spender.into(), &amount_word))
             .with_to(self.contract_addrs.token.into()))
@@ -559,19 +599,14 @@ impl PayloadGenerator for BasicPayloadGenerator {
         destination: Address,
         amount: Balance<C>,
     ) -> payload::Result<Self::TxRequest> {
-        if XDai::is::<C>() {
-            let amount_word = u256_from_amount(&amount.amount().to_be_bytes());
-            Ok(TransactionRequest::default()
-                .with_to(destination.into())
-                .with_value(amount_word))
+        let to = if XDai::is::<C>() {
+            destination.into()
         } else if WxHOPR::is::<C>() {
-            let amount_word = u256_from_amount(&amount.amount().to_be_bytes());
-            Ok(TransactionRequest::default()
-                .with_input(encode_transfer(destination.into(), &amount_word))
-                .with_to(self.contract_addrs.token.into()))
+            self.contract_addrs.token.into()
         } else {
-            Err(InvalidArguments("invalid currency"))
-        }
+            return Err(InvalidArguments("invalid currency"));
+        };
+        Ok(transfer_tx(destination, amount)?.with_to(to))
     }
 
     fn announce(
@@ -579,26 +614,12 @@ impl PayloadGenerator for BasicPayloadGenerator {
         announcement: AnnouncementData,
         key_binding_fee: HoprBalance,
     ) -> payload::Result<Self::TxRequest> {
-        let sig = announcement.key_binding().signature.as_ref();
-        let mut sig0 = [0u8; 32];
-        let mut sig1 = [0u8; 32];
-        sig0.copy_from_slice(&sig[0..32]);
-        sig1.copy_from_slice(&sig[32..64]);
-
-        let mut pub_key = [0u8; 32];
-        pub_key.copy_from_slice(announcement.key_binding().packet_key.as_ref());
-
-        let multiaddr_str = announcement
-            .multiaddress()
-            .as_ref()
-            .map(ToString::to_string)
-            .unwrap_or_default();
-
-        let inner =
-            encode_key_bind_announce_body(self.me.into(), &sig0, &sig1, &pub_key, &multiaddr_str);
-
-        let fee_word = u256_from_balance(&key_binding_fee);
-        let call_data = encode_send(self.contract_addrs.announcements.into(), &fee_word, &inner);
+        let call_data = announce_call_data(
+            self.me.into(),
+            self.contract_addrs.announcements.into(),
+            &announcement,
+            &key_binding_fee,
+        );
 
         Ok(TransactionRequest::default()
             .with_input(call_data)
@@ -609,11 +630,8 @@ impl PayloadGenerator for BasicPayloadGenerator {
         if dest.eq(&self.me) {
             return Err(InvalidArguments("Cannot fund channel to self"));
         }
-        let src = amount.amount().to_be_bytes();
-        let amount_96: &[u8; 12] = <&[u8; 12]>::try_from(&src[32 - 12..])
-            .map_err(|_| InvalidArguments("amount conversion"))?;
         Ok(TransactionRequest::default()
-            .with_input(encode_fund_channel(dest.into(), amount_96))
+            .with_input(encode_fund_channel(dest.into(), &amount_96(&amount)))
             .with_to(self.contract_addrs.channels.into()))
     }
 
@@ -646,7 +664,7 @@ impl PayloadGenerator for BasicPayloadGenerator {
     ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
             return Err(InvalidArguments(
-                "Cannot initiate closure of incoming channel to self",
+                "Cannot finalize closure of outgoing channel to self",
             ));
         }
         Ok(TransactionRequest::default()
@@ -687,7 +705,7 @@ impl PayloadGenerator for BasicPayloadGenerator {
         let default_target = make_default_target(self.contract_addrs.channels.into());
         let admins_raw: Vec<[u8; 20]> = admins.iter().map(|a| (*a).into()).collect();
         let user_data = encode_user_data_body(&function_id, &nonce, &default_target, &admins_raw);
-        let balance_word = u256_from_balance(&balance);
+        let balance_word = balance.amount().to_be_bytes();
         let tx_payload = encode_send(
             self.contract_addrs.node_stake_factory.into(),
             &balance_word,
@@ -721,15 +739,22 @@ impl SafePayloadGenerator {
             module,
         }
     }
+
+    /// Wraps `call_data` in an `execTransactionFromModule` call to `to`, targeting the Safe module.
+    fn module_exec_tx(&self, to: [u8; 20], call_data: &[u8]) -> TransactionRequest {
+        TransactionRequest::default()
+            .with_input(encode_exec_from_module(to, call_data))
+            .with_to(self.module.into())
+            .with_gas_limit(DEFAULT_TX_GAS)
+    }
 }
 
 impl PayloadGenerator for SafePayloadGenerator {
     type TxRequest = TransactionRequest;
 
     fn approve(&self, spender: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
-        let amount_word = u256_from_balance(&amount);
-        Ok(TransactionRequest::default()
-            .with_input(encode_approve(spender.into(), &amount_word))
+        let amount_word = amount.amount().to_be_bytes();
+        Ok(approve_tx(spender.into(), &amount_word)
             .with_to(self.contract_addrs.token.into())
             .with_gas_limit(DEFAULT_TX_GAS))
     }
@@ -739,21 +764,16 @@ impl PayloadGenerator for SafePayloadGenerator {
         destination: Address,
         amount: Balance<C>,
     ) -> payload::Result<Self::TxRequest> {
-        if XDai::is::<C>() {
-            let amount_word = u256_from_amount(&amount.amount().to_be_bytes());
-            Ok(TransactionRequest::default()
-                .with_to(destination.into())
-                .with_value(amount_word)
-                .with_gas_limit(DEFAULT_TX_GAS))
+        let to = if XDai::is::<C>() {
+            destination.into()
         } else if WxHOPR::is::<C>() {
-            let amount_word = u256_from_amount(&amount.amount().to_be_bytes());
-            Ok(TransactionRequest::default()
-                .with_input(encode_transfer(destination.into(), &amount_word))
-                .with_to(self.contract_addrs.token.into())
-                .with_gas_limit(DEFAULT_TX_GAS))
+            self.contract_addrs.token.into()
         } else {
-            Err(InvalidArguments("invalid currency"))
-        }
+            return Err(InvalidArguments("invalid currency"));
+        };
+        Ok(transfer_tx(destination, amount)?
+            .with_to(to)
+            .with_gas_limit(DEFAULT_TX_GAS))
     }
 
     fn announce(
@@ -761,33 +781,14 @@ impl PayloadGenerator for SafePayloadGenerator {
         announcement: AnnouncementData,
         key_binding_fee: HoprBalance,
     ) -> payload::Result<Self::TxRequest> {
-        let sig = announcement.key_binding().signature.as_ref();
-        let mut sig0 = [0u8; 32];
-        let mut sig1 = [0u8; 32];
-        sig0.copy_from_slice(&sig[0..32]);
-        sig1.copy_from_slice(&sig[32..64]);
+        let call_data = announce_call_data(
+            self.me.into(),
+            self.contract_addrs.announcements.into(),
+            &announcement,
+            &key_binding_fee,
+        );
 
-        let mut pub_key = [0u8; 32];
-        pub_key.copy_from_slice(announcement.key_binding().packet_key.as_ref());
-
-        let multiaddr_str = announcement
-            .multiaddress()
-            .as_ref()
-            .map(ToString::to_string)
-            .unwrap_or_default();
-
-        let inner =
-            encode_key_bind_announce_body(self.me.into(), &sig0, &sig1, &pub_key, &multiaddr_str);
-
-        let fee_word = u256_from_balance(&key_binding_fee);
-        let send_call = encode_send(self.contract_addrs.announcements.into(), &fee_word, &inner);
-
-        let module_call = encode_exec_from_module(self.contract_addrs.token.into(), &send_call);
-
-        Ok(TransactionRequest::default()
-            .with_input(module_call)
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &call_data))
     }
 
     fn fund_channel(&self, dest: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
@@ -801,17 +802,9 @@ impl PayloadGenerator for SafePayloadGenerator {
                 "cannot fund channel with amount larger than MAX_FUNDING_AMOUNT",
             ));
         }
-        let src = amount.amount().to_be_bytes();
-        let amount_96: &[u8; 12] = <&[u8; 12]>::try_from(&src[32 - 12..])
-            .map_err(|_| InvalidArguments("amount conversion"))?;
-        let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), amount_96);
-        Ok(TransactionRequest::default()
-            .with_input(encode_exec_from_module(
-                self.contract_addrs.channels.into(),
-                &call_data,
-            ))
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        let call_data =
+            encode_fund_channel_safe(self.me.into(), dest.into(), &amount_96(&amount));
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
     fn close_incoming_channel(&self, source: Address) -> payload::Result<Self::TxRequest> {
@@ -819,13 +812,7 @@ impl PayloadGenerator for SafePayloadGenerator {
             return Err(InvalidArguments("Cannot close incoming channel from self"));
         }
         let call_data = encode_close_incoming_channel_safe(self.me.into(), source.into());
-        Ok(TransactionRequest::default()
-            .with_input(encode_exec_from_module(
-                self.contract_addrs.channels.into(),
-                &call_data,
-            ))
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
     fn initiate_outgoing_channel_closure(
@@ -839,13 +826,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let call_data =
             encode_initiate_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(TransactionRequest::default()
-            .with_input(encode_exec_from_module(
-                self.contract_addrs.channels.into(),
-                &call_data,
-            ))
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
     fn finalize_outgoing_channel_closure(
@@ -854,34 +835,21 @@ impl PayloadGenerator for SafePayloadGenerator {
     ) -> payload::Result<Self::TxRequest> {
         if destination.eq(&self.me) {
             return Err(InvalidArguments(
-                "Cannot initiate closure of incoming channel to self",
+                "Cannot finalize closure of outgoing channel to self",
             ));
         }
         let call_data =
             encode_finalize_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(TransactionRequest::default()
-            .with_input(encode_exec_from_module(
-                self.contract_addrs.channels.into(),
-                &call_data,
-            ))
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
     fn redeem_ticket(&self, acked_ticket: RedeemableTicket) -> payload::Result<Self::TxRequest> {
         let call_data = encode_redeem_ticket_safe(self.me.into(), &acked_ticket, &self.me)?;
-        Ok(TransactionRequest::default()
-            .with_input(encode_exec_from_module(
-                self.contract_addrs.channels.into(),
-                &call_data,
-            ))
-            .with_to(self.module.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
     fn register_safe_by_node(&self, safe_addr: Address) -> payload::Result<Self::TxRequest> {
-        Ok(TransactionRequest::default()
-            .with_input(encode_register_safe_by_node(safe_addr.into()))
+        Ok(register_safe_tx(safe_addr.into())
             .with_to(self.contract_addrs.node_safe_registry.into())
             .with_gas_limit(DEFAULT_TX_GAS))
     }
@@ -904,20 +872,6 @@ impl PayloadGenerator for SafePayloadGenerator {
     }
 }
 
-// ─── Conversion helpers ───────────────────────────────────────────────────
-
-/// Converts a 32-byte primitive U256 big-endian representation to a 32-byte word.
-fn u256_from_amount(src: &[u8]) -> [u8; 32] {
-    let mut w = [0u8; 32];
-    let n = src.len().min(32);
-    w[32 - n..].copy_from_slice(&src[src.len() - n..]);
-    w
-}
-
-fn u256_from_balance(balance: &HoprBalance) -> [u8; 32] {
-    u256_from_amount(&balance.amount().to_be_bytes())
-}
-
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -938,6 +892,7 @@ mod tests {
     lazy_static::lazy_static! {
         static ref CONTRACT_ADDRS: crate::chain::ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
     }
+
     #[tokio::test]
     async fn test_announce() -> anyhow::Result<()> {
         let test_multiaddr = Multiaddr::from_str("/ip4/1.2.3.4/tcp/56")?;

@@ -23,6 +23,32 @@ lazy_static::lazy_static! {
     static ref B_ADDRS: hopr_bindings::ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
     // static_based uses crate::chain::ContractAddresses (local struct when not use-bindings).
     static ref S_ADDRS: crate::chain::ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
+    // Shared Safe module address used across all `SafePayloadGenerator` tests below.
+    static ref MODULE: Address = [1u8; Address::SIZE].into();
+}
+
+fn basic_gens(
+    key: &ChainKeypair,
+) -> (
+    bindings_based::BasicPayloadGenerator,
+    static_based::BasicPayloadGenerator,
+) {
+    (
+        bindings_based::BasicPayloadGenerator::new(key.into(), *B_ADDRS),
+        static_based::BasicPayloadGenerator::new(key.into(), *S_ADDRS),
+    )
+}
+
+fn safe_gens(
+    key: &ChainKeypair,
+) -> (
+    bindings_based::SafePayloadGenerator,
+    static_based::SafePayloadGenerator,
+) {
+    (
+        bindings_based::SafePayloadGenerator::new(key, *B_ADDRS, *MODULE),
+        static_based::SafePayloadGenerator::new(key, *S_ADDRS, *MODULE),
+    )
 }
 
 macro_rules! assert_signed_eq {
@@ -47,7 +73,7 @@ macro_rules! assert_signed_eq {
 }
 
 #[tokio::test]
-async fn cross_verify_announce_basic() -> anyhow::Result<()> {
+async fn announce_basic() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let kb = KeyBinding::new(
         (&key).into(),
@@ -56,8 +82,7 @@ async fn cross_verify_announce_basic() -> anyhow::Result<()> {
     let ma = Multiaddr::from_str("/ip4/1.2.3.4/tcp/56")?;
     let ad = AnnouncementData::new(kb, Some(ma))?;
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "announce_basic",
@@ -71,9 +96,8 @@ async fn cross_verify_announce_basic() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_announce_safe() -> anyhow::Result<()> {
+async fn announce_safe() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
-    let module: Address = [1u8; Address::SIZE].into();
     let kb = KeyBinding::new(
         (&key).into(),
         &OffchainKeypair::from_secret(&PRIVATE_KEY_1)?,
@@ -81,8 +105,7 @@ async fn cross_verify_announce_safe() -> anyhow::Result<()> {
     let ma = Multiaddr::from_str("/ip4/5.6.7.8/tcp/99")?;
     let ad = AnnouncementData::new(kb, Some(ma))?;
 
-    let b_gen = bindings_based::SafePayloadGenerator::new(&key, *B_ADDRS, module);
-    let s_gen = static_based::SafePayloadGenerator::new(&key, *S_ADDRS, module);
+    let (b_gen, s_gen) = safe_gens(&key);
 
     assert_signed_eq!(
         "announce_safe",
@@ -96,12 +119,11 @@ async fn cross_verify_announce_safe() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_redeem_ticket_basic() -> anyhow::Result<()> {
+async fn redeem_ticket_basic() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
     let ticket = *REDEEMABLE_TICKET;
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "redeem_ticket_basic",
@@ -115,13 +137,11 @@ async fn cross_verify_redeem_ticket_basic() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_redeem_ticket_safe() -> anyhow::Result<()> {
+async fn redeem_ticket_safe() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
-    let module: Address = [1u8; Address::SIZE].into();
     let ticket = *REDEEMABLE_TICKET;
 
-    let b_gen = bindings_based::SafePayloadGenerator::new(&key, *B_ADDRS, module);
-    let s_gen = static_based::SafePayloadGenerator::new(&key, *S_ADDRS, module);
+    let (b_gen, s_gen) = safe_gens(&key);
 
     assert_signed_eq!(
         "redeem_ticket_safe",
@@ -135,12 +155,11 @@ async fn cross_verify_redeem_ticket_safe() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_withdraw_basic() -> anyhow::Result<()> {
+async fn withdraw_basic() -> anyhow::Result<()> {
     let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key_alice).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key_alice).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key_alice);
 
     assert_signed_eq!(
         "withdraw_basic",
@@ -154,13 +173,11 @@ async fn cross_verify_withdraw_basic() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_withdraw_safe() -> anyhow::Result<()> {
+async fn withdraw_safe() -> anyhow::Result<()> {
     let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
-    let module: Address = [1u8; Address::SIZE].into();
 
-    let b_gen = bindings_based::SafePayloadGenerator::new(&key_alice, *B_ADDRS, module);
-    let s_gen = static_based::SafePayloadGenerator::new(&key_alice, *S_ADDRS, module);
+    let (b_gen, s_gen) = safe_gens(&key_alice);
 
     assert_signed_eq!(
         "withdraw_safe",
@@ -174,12 +191,11 @@ async fn cross_verify_withdraw_safe() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_fund_channel() -> anyhow::Result<()> {
+async fn fund_channel() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let dest: Address = [0xab; Address::SIZE].into();
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "fund_channel",
@@ -193,13 +209,11 @@ async fn cross_verify_fund_channel() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_fund_channel_safe() -> anyhow::Result<()> {
+async fn fund_channel_safe() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
-    let module: Address = [1u8; Address::SIZE].into();
     let dest: Address = [0xab; Address::SIZE].into();
 
-    let b_gen = bindings_based::SafePayloadGenerator::new(&key, *B_ADDRS, module);
-    let s_gen = static_based::SafePayloadGenerator::new(&key, *S_ADDRS, module);
+    let (b_gen, s_gen) = safe_gens(&key);
 
     assert_signed_eq!(
         "fund_channel_safe",
@@ -213,12 +227,11 @@ async fn cross_verify_fund_channel_safe() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_close_incoming_channel() -> anyhow::Result<()> {
+async fn close_incoming_channel() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let source: Address = [0xcd; Address::SIZE].into();
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "close_incoming",
@@ -232,12 +245,11 @@ async fn cross_verify_close_incoming_channel() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_initiate_outgoing_channel_closure() -> anyhow::Result<()> {
+async fn initiate_outgoing_channel_closure() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let dest: Address = [0xef; Address::SIZE].into();
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "initiate_closure",
@@ -255,8 +267,7 @@ async fn cross_verify_finalize_outgoing_channel_closure() -> anyhow::Result<()> 
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let dest: Address = [0xef; Address::SIZE].into();
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "finalize_closure",
@@ -274,8 +285,7 @@ async fn cross_verify_register_safe_by_node() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let safe: Address = [0x55; Address::SIZE].into();
 
-    let b_gen = bindings_based::BasicPayloadGenerator::new((&key).into(), *B_ADDRS);
-    let s_gen = static_based::BasicPayloadGenerator::new((&key).into(), *S_ADDRS);
+    let (b_gen, s_gen) = basic_gens(&key);
 
     assert_signed_eq!(
         "register_safe",
@@ -289,12 +299,192 @@ async fn cross_verify_register_safe_by_node() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn cross_verify_deregister_node_by_safe() -> anyhow::Result<()> {
+async fn approve_basic() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
-    let module: Address = [1u8; Address::SIZE].into();
+    let spender: Address = [0x11; Address::SIZE].into();
 
-    let b_gen = bindings_based::SafePayloadGenerator::new(&key, *B_ADDRS, module);
-    let s_gen = static_based::SafePayloadGenerator::new(&key, *S_ADDRS, module);
+    let (b_gen, s_gen) = basic_gens(&key);
+
+    assert_signed_eq!(
+        "approve_basic",
+        b_gen.approve(spender, HoprBalance::from(1000))?,
+        s_gen.approve(spender, HoprBalance::from(1000))?,
+        9,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn approve_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let spender: Address = [0x11; Address::SIZE].into();
+
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "approve_safe",
+        b_gen.approve(spender, HoprBalance::from(1000))?,
+        s_gen.approve(spender, HoprBalance::from(1000))?,
+        10,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn withdraw_xdai_basic() -> anyhow::Result<()> {
+    let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
+
+    let (b_gen, s_gen) = basic_gens(&key_alice);
+
+    assert_signed_eq!(
+        "withdraw_xdai_basic",
+        b_gen.transfer((&key_bob).into(), XDaiBalance::from(100))?,
+        s_gen.transfer((&key_bob).into(), XDaiBalance::from(100))?,
+        11,
+        1,
+        &key_bob
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn withdraw_xdai_safe() -> anyhow::Result<()> {
+    let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
+
+    let (b_gen, s_gen) = safe_gens(&key_alice);
+
+    assert_signed_eq!(
+        "withdraw_xdai_safe",
+        b_gen.transfer((&key_bob).into(), XDaiBalance::from(100))?,
+        s_gen.transfer((&key_bob).into(), XDaiBalance::from(100))?,
+        12,
+        1,
+        &key_bob
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn close_incoming_channel_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let source: Address = [0xcd; Address::SIZE].into();
+
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "close_incoming_safe",
+        b_gen.close_incoming_channel(source)?,
+        s_gen.close_incoming_channel(source)?,
+        13,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn initiate_outgoing_channel_closure_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let dest: Address = [0xef; Address::SIZE].into();
+
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "initiate_closure_safe",
+        b_gen.initiate_outgoing_channel_closure(dest)?,
+        s_gen.initiate_outgoing_channel_closure(dest)?,
+        14,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn finalize_outgoing_channel_closure_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let dest: Address = [0xef; Address::SIZE].into();
+
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "finalize_closure_safe",
+        b_gen.finalize_outgoing_channel_closure(dest)?,
+        s_gen.finalize_outgoing_channel_closure(dest)?,
+        15,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn register_safe_by_node_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let safe: Address = [0x55; Address::SIZE].into();
+
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "register_safe_safe",
+        b_gen.register_safe_by_node(safe)?,
+        s_gen.register_safe_by_node(safe)?,
+        16,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn deploy_safe_without_node() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let admins: Vec<Address> = vec![[0x22; Address::SIZE].into(), [0x33; Address::SIZE].into()];
+    let nonce = [0x44u8; 32];
+
+    let (b_gen, s_gen) = basic_gens(&key);
+
+    assert_signed_eq!(
+        "deploy_safe_without_node",
+        b_gen.deploy_safe(HoprBalance::from(1000), &admins, false, nonce)?,
+        s_gen.deploy_safe(HoprBalance::from(1000), &admins, false, nonce)?,
+        17,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn deploy_safe_with_node() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let admins: Vec<Address> = vec![[0x22; Address::SIZE].into(), [0x33; Address::SIZE].into()];
+    let nonce = [0x44u8; 32];
+
+    let (b_gen, s_gen) = basic_gens(&key);
+
+    assert_signed_eq!(
+        "deploy_safe_with_node",
+        b_gen.deploy_safe(HoprBalance::from(1000), &admins, true, nonce)?,
+        s_gen.deploy_safe(HoprBalance::from(1000), &admins, true, nonce)?,
+        18,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn deregister_node_by_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+
+    let (b_gen, s_gen) = safe_gens(&key);
 
     assert_signed_eq!(
         "deregister_node",
