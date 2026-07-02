@@ -1,6 +1,8 @@
 //! Payload generators using manual ABI encoding.
 //!
-//! Function selectors are computed via `sha3::Keccak256` for EIP-1559 transactions signing.
+//! Function selectors (see the `selectors` module) are hardcoded `keccak256(signature)[..4]`
+//! constants; `sha3::Keccak256` itself is only used at runtime to hash the transaction payload
+//! for EIP-1559 signing.
 //! The `bindings_based` module is kept as a test module to verify correctness of every encoded payload.
 
 // When `use-bindings` is active this module's types are not re-exported (bindings-based
@@ -8,6 +10,7 @@
 #![cfg_attr(feature = "use-bindings", allow(dead_code))]
 
 use hex_literal::hex;
+use rlp::RlpStream;
 use sha3::{Digest, Keccak256};
 
 use crate::chain::{
@@ -19,88 +22,72 @@ use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
 use crate::primitive::prelude::*;
 
-// ─── minimal RLP encoder ───────────────────────────────────────────────────
+/// Strips leading zero bytes from a big-endian integer, as required for canonical RLP integer
+/// encoding of values wider than the `rlp` crate's built-in integer impls (up to `u128`).
+fn trim_be(bytes: &[u8]) -> &[u8] {
+    let first_nonzero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
+    &bytes[first_nonzero..]
+}
 
-mod rlp {
-    fn encode_length(len: usize, offset: u8) -> Vec<u8> {
-        if len < 56 {
-            vec![offset + len as u8]
-        } else {
-            let b = len.to_be_bytes();
-            let first = b.iter().position(|&x| x != 0).unwrap_or(7);
-            let ll = 8 - first;
-            let mut out = vec![offset + 55 + ll as u8];
-            out.extend_from_slice(&b[first..]);
-            out
-        }
-    }
+// ─── ABI function selectors ────────────────────────────────────────────────
 
-    /// RLP-encode a raw byte string.
-    pub fn bytes(data: &[u8]) -> Vec<u8> {
-        if data.len() == 1 && data[0] < 0x80 {
-            return data.to_vec();
-        }
-        let mut out = encode_length(data.len(), 0x80);
-        out.extend_from_slice(data);
-        out
-    }
+/// Precomputed 4-byte ABI selectors (the first 4 bytes of `keccak256(signature)`) for every
+/// contract function called from this module. Each is checked against the signature in its doc
+/// comment by the `cross_verify` tests (which compare against the `alloy`-bindings encoding).
+mod selectors {
+    use hex_literal::hex;
 
-    /// RLP-encode a list of already-encoded items.
-    pub fn list(items: &[Vec<u8>]) -> Vec<u8> {
-        let content: Vec<u8> = items.iter().flat_map(|i| i.iter().copied()).collect();
-        let mut out = encode_length(content.len(), 0xc0);
-        out.extend_from_slice(&content);
-        out
-    }
-
-    /// RLP-encode a u64 as a minimal big-endian integer.
-    pub fn uint64(v: u64) -> Vec<u8> {
-        if v == 0 {
-            return bytes(&[]);
-        }
-        let b = v.to_be_bytes();
-        let first = b.iter().position(|&x| x != 0).unwrap_or(7);
-        bytes(&b[first..])
-    }
-
-    /// RLP-encode a u128 as a minimal big-endian integer.
-    pub fn uint128(v: u128) -> Vec<u8> {
-        if v == 0 {
-            return bytes(&[]);
-        }
-        let b = v.to_be_bytes();
-        let first = b.iter().position(|&x| x != 0).unwrap_or(15);
-        bytes(&b[first..])
-    }
-
-    /// RLP-encode a 32-byte big-endian integer (U256) in minimal form.
-    pub fn uint256_bytes(v: &[u8; 32]) -> Vec<u8> {
-        let first = v.iter().position(|&x| x != 0).unwrap_or(32);
-        if first == 32 {
-            return bytes(&[]);
-        }
-        bytes(&v[first..])
-    }
+    /// `approve(address,uint256)`
+    pub const APPROVE: [u8; 4] = hex!("095ea7b3");
+    /// `transfer(address,uint256)`
+    pub const TRANSFER: [u8; 4] = hex!("a9059cbb");
+    /// ERC-777 `send(address,uint256,bytes)`
+    pub const SEND: [u8; 4] = hex!("9bd9bbc6");
+    /// `registerSafeByNode(address)`
+    pub const REGISTER_SAFE_BY_NODE: [u8; 4] = hex!("7f935931");
+    /// `deregisterNodeBySafe(address)`
+    pub const DEREGISTER_NODE_BY_SAFE: [u8; 4] = hex!("91607c4c");
+    /// Gnosis Safe `execTransactionFromModule(address,uint256,bytes,uint8)`
+    pub const EXEC_TRANSACTION_FROM_MODULE: [u8; 4] = hex!("468721a7");
+    /// `fundChannel(address,uint96)`
+    pub const FUND_CHANNEL: [u8; 4] = hex!("fc55309a");
+    /// `fundChannelSafe(address,address,uint96)`
+    pub const FUND_CHANNEL_SAFE: [u8; 4] = hex!("0abec58f");
+    /// `closeIncomingChannel(address)`
+    pub const CLOSE_INCOMING_CHANNEL: [u8; 4] = hex!("1a7ffe7a");
+    /// `closeIncomingChannelSafe(address,address)`
+    pub const CLOSE_INCOMING_CHANNEL_SAFE: [u8; 4] = hex!("54a2edf5");
+    /// `initiateOutgoingChannelClosure(address)`
+    pub const INITIATE_OUTGOING_CHANNEL_CLOSURE: [u8; 4] = hex!("7c8e28da");
+    /// `initiateOutgoingChannelClosureSafe(address,address)`
+    pub const INITIATE_OUTGOING_CHANNEL_CLOSURE_SAFE: [u8; 4] = hex!("bda65f45");
+    /// `finalizeOutgoingChannelClosure(address)`
+    pub const FINALIZE_OUTGOING_CHANNEL_CLOSURE: [u8; 4] = hex!("23cb3ac0");
+    /// `finalizeOutgoingChannelClosureSafe(address,address)`
+    pub const FINALIZE_OUTGOING_CHANNEL_CLOSURE_SAFE: [u8; 4] = hex!("651514bf");
+    /// `redeemTicket(((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
+    pub const REDEEM_TICKET: [u8; 4] = hex!("65e3fa72");
+    /// `redeemTicketSafe(address,((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
+    pub const REDEEM_TICKET_SAFE: [u8; 4] = hex!("2d50b18b");
 }
 
 // ─── ABI encoding helpers ──────────────────────────────────────────────────
 
-/// Computes the 4-byte ABI function selector from the Solidity function signature.
-fn sel(sig: &str) -> [u8; 4] {
-    let h = Keccak256::digest(sig.as_bytes());
-    [h[0], h[1], h[2], h[3]]
-}
-
 /// Right-aligns a big-endian byte slice (at most 32 bytes) into a zero-padded 32-byte word.
 fn right_align32(data: &[u8]) -> [u8; 32] {
-    let mut w = [0u8; 32];
-    w[32 - data.len()..].copy_from_slice(data);
-    w
+    U256::from_big_endian(data).to_big_endian()
 }
 
 /// ABI-encodes an address as 32 bytes (left-zero-padded).
 fn addr32(a: [u8; 20]) -> [u8; 32] {
     right_align32(&a)
+}
+
+/// Truncates a big-endian integer to its low `keep` bytes, then right-aligns those into a
+/// zero-padded 32-byte ABI word. Used for values ABI-typed narrower than 256 bits (e.g.
+/// `uint96`, `uint48`, `uint24`) that are still held as a wider Rust integer.
+fn truncated_word(full: &[u8], keep: usize) -> [u8; 32] {
+    right_align32(&full[full.len() - keep..])
 }
 
 /// Converts a usize to a 32-byte big-endian word (for offsets / lengths).
@@ -147,31 +134,23 @@ fn call_with_bytes(selector: [u8; 4], static_words: &[[u8; 32]], data: &[u8]) ->
 // ─── Specific ABI call encoders ───────────────────────────────────────────
 
 fn encode_approve(spender: [u8; 20], amount: &[u8; 32]) -> Vec<u8> {
-    static_call(sel("approve(address,uint256)"), &[addr32(spender), *amount])
+    static_call(selectors::APPROVE, &[addr32(spender), *amount])
 }
 
 fn encode_transfer(recipient: [u8; 20], amount: &[u8; 32]) -> Vec<u8> {
-    static_call(
-        sel("transfer(address,uint256)"),
-        &[addr32(recipient), *amount],
-    )
+    static_call(selectors::TRANSFER, &[addr32(recipient), *amount])
 }
 
-/// ERC-777 `send(address,uint256,bytes)`.
 fn encode_send(recipient: [u8; 20], amount: &[u8; 32], data: &[u8]) -> Vec<u8> {
-    call_with_bytes(
-        sel("send(address,uint256,bytes)"),
-        &[addr32(recipient), *amount],
-        data,
-    )
+    call_with_bytes(selectors::SEND, &[addr32(recipient), *amount], data)
 }
 
 fn encode_register_safe_by_node(safe_addr: [u8; 20]) -> Vec<u8> {
-    static_call(sel("registerSafeByNode(address)"), &[addr32(safe_addr)])
+    static_call(selectors::REGISTER_SAFE_BY_NODE, &[addr32(safe_addr)])
 }
 
 fn encode_deregister_node_by_safe(node_addr: [u8; 20]) -> Vec<u8> {
-    static_call(sel("deregisterNodeBySafe(address)"), &[addr32(node_addr)])
+    static_call(selectors::DEREGISTER_NODE_BY_SAFE, &[addr32(node_addr)])
 }
 
 /// Gnosis Safe module: `execTransactionFromModule(address,uint256,bytes,uint8)`.
@@ -180,9 +159,7 @@ fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
     let offset = 4usize * 32; // 4 head slots → offset = 128
     let tail = abi_dyn_tail(call_data);
     let mut out = Vec::with_capacity(4 + 4 * 32 + tail.len());
-    out.extend_from_slice(&sel(
-        "execTransactionFromModule(address,uint256,bytes,uint8)",
-    ));
+    out.extend_from_slice(&selectors::EXEC_TRANSACTION_FROM_MODULE);
     out.extend_from_slice(&addr32(to));
     out.extend_from_slice(&[0u8; 32]); // value = 0
     out.extend_from_slice(&word_usize(offset));
@@ -191,38 +168,35 @@ fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
     out
 }
 
-fn encode_fund_channel(account: [u8; 20], amount_96: &[u8; 12]) -> Vec<u8> {
-    static_call(
-        sel("fundChannel(address,uint96)"),
-        &[addr32(account), right_align32(amount_96)],
-    )
+fn encode_fund_channel(account: [u8; 20], amount_word: [u8; 32]) -> Vec<u8> {
+    static_call(selectors::FUND_CHANNEL, &[addr32(account), amount_word])
 }
 
 fn encode_fund_channel_safe(
     self_addr: [u8; 20],
     account: [u8; 20],
-    amount_96: &[u8; 12],
+    amount_word: [u8; 32],
 ) -> Vec<u8> {
     static_call(
-        sel("fundChannelSafe(address,address,uint96)"),
-        &[addr32(self_addr), addr32(account), right_align32(amount_96)],
+        selectors::FUND_CHANNEL_SAFE,
+        &[addr32(self_addr), addr32(account), amount_word],
     )
 }
 
 fn encode_close_incoming_channel(source: [u8; 20]) -> Vec<u8> {
-    static_call(sel("closeIncomingChannel(address)"), &[addr32(source)])
+    static_call(selectors::CLOSE_INCOMING_CHANNEL, &[addr32(source)])
 }
 
 fn encode_close_incoming_channel_safe(self_addr: [u8; 20], source: [u8; 20]) -> Vec<u8> {
     static_call(
-        sel("closeIncomingChannelSafe(address,address)"),
+        selectors::CLOSE_INCOMING_CHANNEL_SAFE,
         &[addr32(self_addr), addr32(source)],
     )
 }
 
 fn encode_initiate_outgoing_channel_closure(destination: [u8; 20]) -> Vec<u8> {
     static_call(
-        sel("initiateOutgoingChannelClosure(address)"),
+        selectors::INITIATE_OUTGOING_CHANNEL_CLOSURE,
         &[addr32(destination)],
     )
 }
@@ -232,14 +206,14 @@ fn encode_initiate_outgoing_channel_closure_safe(
     destination: [u8; 20],
 ) -> Vec<u8> {
     static_call(
-        sel("initiateOutgoingChannelClosureSafe(address,address)"),
+        selectors::INITIATE_OUTGOING_CHANNEL_CLOSURE_SAFE,
         &[addr32(self_addr), addr32(destination)],
     )
 }
 
 fn encode_finalize_outgoing_channel_closure(destination: [u8; 20]) -> Vec<u8> {
     static_call(
-        sel("finalizeOutgoingChannelClosure(address)"),
+        selectors::FINALIZE_OUTGOING_CHANNEL_CLOSURE,
         &[addr32(destination)],
     )
 }
@@ -249,17 +223,28 @@ fn encode_finalize_outgoing_channel_closure_safe(
     destination: [u8; 20],
 ) -> Vec<u8> {
     static_call(
-        sel("finalizeOutgoingChannelClosureSafe(address,address)"),
+        selectors::FINALIZE_OUTGOING_CHANNEL_CLOSURE_SAFE,
         &[addr32(self_addr), addr32(destination)],
     )
 }
 
-/// Packs the 16 × 32-byte words that make up `(RedeemableTicket, VRFParameters)`.
-/// All fields are static (no dynamic types inside these structs).
-fn redeem_ticket_words(
-    acked_ticket: &RedeemableTicket,
-    me: &Address,
-) -> payload::Result<[[u8; 32]; 16]> {
+/// Splits a 65-byte uncompressed SEC1 elliptic-curve point (`0x04 || X || Y`) into its X and Y
+/// coordinates, each right-aligned into a 32-byte ABI word.
+fn point_xy_words(uncompressed_point: &[u8]) -> ([u8; 32], [u8; 32]) {
+    (
+        right_align32(&uncompressed_point[1..33]),
+        right_align32(&uncompressed_point[33..65]),
+    )
+}
+
+/// Splits a 64-byte compact signature (`r || s`) into its two 32-byte halves.
+fn split64(bytes: &[u8]) -> ([u8; 32], [u8; 32]) {
+    (right_align32(&bytes[0..32]), right_align32(&bytes[32..64]))
+}
+
+/// Packs the 8 × 32-byte words of the Solidity `RedeemableTicket` struct: `TicketData` (5
+/// words), `CompactSignature` (2 words), and `porSecret` (1 word).
+fn redeemable_ticket_words(acked_ticket: &RedeemableTicket) -> payload::Result<[[u8; 32]; 8]> {
     let sig = acked_ticket
         .verified_ticket()
         .signature
@@ -270,48 +255,22 @@ fn redeem_ticket_words(
     // TicketData
     let channel_id: [u8; 32] = *<&[u8; 32]>::try_from(acked_ticket.ticket.channel_id().as_ref())
         .map_err(|_| InvalidArguments("channel_id length"))?;
-    let amount_src = acked_ticket.verified_ticket().amount.amount().to_be_bytes();
-    let amount_word = right_align32(&amount_src[32 - 12..]);
-
-    let index_src = acked_ticket.verified_ticket().index.to_be_bytes();
-    let index_word = right_align32(&index_src[8 - 6..]);
-
-    let epoch_src = acked_ticket.verified_ticket().channel_epoch.to_be_bytes();
-    let epoch_word = right_align32(&epoch_src[4 - 3..]);
-
+    let amount_word = truncated_word(
+        &acked_ticket.verified_ticket().amount.amount().to_be_bytes(),
+        12,
+    );
+    let index_word = truncated_word(&acked_ticket.verified_ticket().index.to_be_bytes(), 6);
+    let epoch_word = truncated_word(
+        &acked_ticket.verified_ticket().channel_epoch.to_be_bytes(),
+        3,
+    );
     let win_prob_word = right_align32(&acked_ticket.verified_ticket().encoded_win_prob);
 
     // CompactSignature
-    let r = right_align32(&serialized_sig[0..32]);
-    let vs = right_align32(&serialized_sig[32..64]);
+    let (r, vs) = split64(serialized_sig);
 
     // porSecret
     let por_secret = right_align32(acked_ticket.response.as_ref());
-
-    // VRFParameters – all computed by our own crypto (no alloy)
-    let vp = &acked_ticket.vrf_params;
-    let v_pt = vp.get_v_encoded_point();
-    let v_bytes = v_pt.as_bytes();
-    let s_b = vp
-        .get_s_b_witness(
-            me,
-            <&[u8; 32]>::try_from(acked_ticket.ticket.verified_hash().as_ref())
-                .map_err(|_| InvalidArguments("ticket hash length"))?,
-            acked_ticket.channel_dst.as_ref(),
-        )
-        .map_err(|_| InvalidArguments("VRF s_b witness computation failed"))?;
-    let sb_bytes = s_b.as_bytes();
-    let hv_pt = vp.get_h_v_witness();
-    let hv_bytes = hv_pt.as_bytes();
-
-    let vx = right_align32(&v_bytes[1..33]);
-    let vy = right_align32(&v_bytes[33..65]);
-    let s_w = right_align32(vp.s.to_bytes().as_ref());
-    let h_w = right_align32(vp.h.to_bytes().as_ref());
-    let sbx = right_align32(&sb_bytes[1..33]);
-    let sby = right_align32(&sb_bytes[33..65]);
-    let hvx = right_align32(&hv_bytes[1..33]);
-    let hvy = right_align32(&hv_bytes[33..65]);
 
     Ok([
         channel_id,
@@ -322,21 +281,52 @@ fn redeem_ticket_words(
         r,
         vs,
         por_secret,
-        vx,
-        vy,
-        s_w,
-        h_w,
-        sbx,
-        sby,
-        hvx,
-        hvy,
     ])
 }
 
+/// Packs the 8 × 32-byte words of the Solidity `VRFParameters` struct: the `V`, `s*B`, and
+/// `h*V` curve points (2 words each, X then Y) plus the `s` and `h` scalars.
+fn vrf_parameters_words(
+    acked_ticket: &RedeemableTicket,
+    me: &Address,
+) -> payload::Result<[[u8; 32]; 8]> {
+    let vp = &acked_ticket.vrf_params;
+
+    let (vx, vy) = point_xy_words(vp.get_v_encoded_point().as_bytes());
+
+    let s_b = vp
+        .get_s_b_witness(
+            me,
+            <&[u8; 32]>::try_from(acked_ticket.ticket.verified_hash().as_ref())
+                .map_err(|_| InvalidArguments("ticket hash length"))?,
+            acked_ticket.channel_dst.as_ref(),
+        )
+        .map_err(|_| InvalidArguments("VRF s_b witness computation failed"))?;
+    let (sbx, sby) = point_xy_words(s_b.as_bytes());
+
+    let (hvx, hvy) = point_xy_words(vp.get_h_v_witness().as_bytes());
+
+    let s_w = right_align32(vp.s.to_bytes().as_ref());
+    let h_w = right_align32(vp.h.to_bytes().as_ref());
+
+    Ok([vx, vy, s_w, h_w, sbx, sby, hvx, hvy])
+}
+
+/// Packs the 16 × 32-byte words that make up `(RedeemableTicket, VRFParameters)`.
+/// All fields are static (no dynamic types inside these structs).
+fn redeem_ticket_words(
+    acked_ticket: &RedeemableTicket,
+    me: &Address,
+) -> payload::Result<[[u8; 32]; 16]> {
+    let mut words = [[0u8; 32]; 16];
+    words[..8].copy_from_slice(&redeemable_ticket_words(acked_ticket)?);
+    words[8..].copy_from_slice(&vrf_parameters_words(acked_ticket, me)?);
+    Ok(words)
+}
+
 fn encode_redeem_ticket(acked_ticket: &RedeemableTicket, me: &Address) -> payload::Result<Vec<u8>> {
-    const SIG: &str = "redeemTicket(((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))";
     let words = redeem_ticket_words(acked_ticket, me)?;
-    Ok(static_call(sel(SIG), &words))
+    Ok(static_call(selectors::REDEEM_TICKET, &words))
 }
 
 fn encode_redeem_ticket_safe(
@@ -344,11 +334,10 @@ fn encode_redeem_ticket_safe(
     acked_ticket: &RedeemableTicket,
     me: &Address,
 ) -> payload::Result<Vec<u8>> {
-    const SIG: &str = "redeemTicketSafe(address,((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))";
     let words = redeem_ticket_words(acked_ticket, me)?;
     let mut all = vec![addr32(self_addr)];
     all.extend_from_slice(&words);
-    Ok(static_call(sel(SIG), &all))
+    Ok(static_call(selectors::REDEEM_TICKET_SAFE, &all))
 }
 
 /// Encodes the `KeyBindAndAnnouncePayload` struct body (without the outer 32-byte offset word
@@ -430,12 +419,6 @@ fn register_safe_tx(safe_addr: [u8; 20]) -> TransactionRequest {
     TransactionRequest::default().with_input(encode_register_safe_by_node(safe_addr))
 }
 
-/// Truncates a balance's 32-byte big-endian representation to the low 96 bits (`uint96`).
-fn amount_96(balance: &HoprBalance) -> [u8; 12] {
-    let src = balance.amount().to_be_bytes();
-    *<&[u8; 12]>::try_from(&src[32 - 12..]).expect("slice of length 12")
-}
-
 /// Builds the `send(announcements, fee, KeyBindAndAnnouncePayload)` call data shared by both generators.
 fn announce_call_data(
     me: [u8; 20],
@@ -443,9 +426,7 @@ fn announce_call_data(
     announcement: &AnnouncementData,
     key_binding_fee: &HoprBalance,
 ) -> Vec<u8> {
-    let sig = announcement.key_binding().signature.as_ref();
-    let sig0 = right_align32(&sig[0..32]);
-    let sig1 = right_align32(&sig[32..64]);
+    let (sig0, sig1) = split64(announcement.key_binding().signature.as_ref());
     let pub_key = right_align32(announcement.key_binding().packet_key.as_ref());
 
     let multiaddr_str = announcement
@@ -510,29 +491,27 @@ impl SignableTransaction for TransactionRequest {
             None => &[],
         };
 
-        let build_fields = |with_sig: bool, y: u64, r: &[u8; 32], s: &[u8; 32]| -> Vec<Vec<u8>> {
-            let mut fields = vec![
-                rlp::uint64(chain_id),
-                rlp::uint64(nonce),
-                rlp::uint128(max_gas.max_priority_fee_per_gas),
-                rlp::uint128(max_gas.max_fee_per_gas),
-                rlp::uint64(gas_limit),
-                rlp::bytes(to_bytes),
-                rlp::uint256_bytes(&self.value),
-                rlp::bytes(&self.input),
-                rlp::list(&[]), // access_list = []
-            ];
+        let build_stream = |with_sig: bool, y: u64, r: &[u8; 32], s: &[u8; 32]| -> RlpStream {
+            let mut stream = RlpStream::new_list(if with_sig { 12 } else { 9 });
+            stream.append(&chain_id);
+            stream.append(&nonce);
+            stream.append(&max_gas.max_priority_fee_per_gas);
+            stream.append(&max_gas.max_fee_per_gas);
+            stream.append(&gas_limit);
+            stream.append(&to_bytes);
+            stream.append(&trim_be(&self.value));
+            stream.append(&self.input.as_slice());
+            stream.begin_list(0); // access_list = []
             if with_sig {
-                fields.push(rlp::uint64(y));
-                fields.push(rlp::bytes(r));
-                fields.push(rlp::bytes(s));
+                stream.append(&y);
+                stream.append(&r.as_slice());
+                stream.append(&s.as_slice());
             }
-            fields
+            stream
         };
 
         // Signing payload: 0x02 || RLP([..unsigned fields..])
-        let unsigned_fields = build_fields(false, 0, &[0; 32], &[0; 32]);
-        let unsigned_rlp = rlp::list(&unsigned_fields);
+        let unsigned_rlp = build_stream(false, 0, &[0; 32], &[0; 32]).out();
         let mut to_sign = Vec::with_capacity(1 + unsigned_rlp.len());
         to_sign.push(0x02);
         to_sign.extend_from_slice(&unsigned_rlp);
@@ -554,8 +533,7 @@ impl SignableTransaction for TransactionRequest {
         s.copy_from_slice(&sig_bytes[32..]);
 
         // Final signed transaction
-        let signed_fields = build_fields(true, y_parity, &r, &s);
-        let signed_rlp = rlp::list(&signed_fields);
+        let signed_rlp = build_stream(true, y_parity, &r, &s).out();
         let mut encoded = Vec::with_capacity(1 + signed_rlp.len());
         encoded.push(0x02);
         encoded.extend_from_slice(&signed_rlp);
@@ -627,8 +605,9 @@ impl PayloadGenerator for BasicPayloadGenerator {
         if dest.eq(&self.me) {
             return Err(InvalidArguments("Cannot fund channel to self"));
         }
+        let amount_word = truncated_word(&amount.amount().to_be_bytes(), 12);
         Ok(TransactionRequest::default()
-            .with_input(encode_fund_channel(dest.into(), &amount_96(&amount)))
+            .with_input(encode_fund_channel(dest.into(), amount_word))
             .with_to(self.contract_addrs.channels.into()))
     }
 
@@ -799,7 +778,8 @@ impl PayloadGenerator for SafePayloadGenerator {
                 "cannot fund channel with amount larger than MAX_FUNDING_AMOUNT",
             ));
         }
-        let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), &amount_96(&amount));
+        let amount_word = truncated_word(&amount.amount().to_be_bytes(), 12);
+        let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), amount_word);
         Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
     }
 
