@@ -335,8 +335,9 @@ fn encode_redeem_ticket_safe(
     me: &Address,
 ) -> payload::Result<Vec<u8>> {
     let words = redeem_ticket_words(acked_ticket, me)?;
-    let mut all = vec![addr32(self_addr)];
-    all.extend_from_slice(&words);
+    let mut all = [[0u8; 32]; 17];
+    all[0] = addr32(self_addr);
+    all[1..].copy_from_slice(&words);
     Ok(static_call(selectors::REDEEM_TICKET_SAFE, &all))
 }
 
