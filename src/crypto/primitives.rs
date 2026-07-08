@@ -19,9 +19,9 @@ pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
 pub use sha3::{Keccak256, Sha3_256};
 /// Secp256k1 elliptic curve, re-exported from the [`k256`] crate.
-pub use k256::Secp256k1;
+pub use k256::{Secp256k1, Scalar as K256Scalar, CompressedPoint as K256CompressedPoint};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
-pub use babyjubjub_ec::BabyJubJub;
+pub use babyjubjub_ec::{BabyJubJub, Scalar as BabyJubJubScalar, GroupRepr as BabyJubJubCompressedPoint};
 
 /// Represents a 256-bit secret key of fixed length.
 /// The value is auto-zeroized on drop.
