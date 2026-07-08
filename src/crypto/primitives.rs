@@ -18,6 +18,10 @@ pub use chacha20::ChaCha20;
 pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
 pub use sha3::{Keccak256, Sha3_256};
+/// Secp256k1 elliptic curve, re-exported from the [`k256`] crate.
+pub use k256::Secp256k1;
+/// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
+pub use babyjubjub_ec::BabyJubJub;
 
 /// Represents a 256-bit secret key of fixed length.
 /// The value is auto-zeroized on drop.
