@@ -85,6 +85,7 @@ serde = [
   "ed25519-dalek/serde",
   "generic-array/serde",
   "k256/serde",
+  "babyjubjub-ec/serde",
   "libp2p-identity/serde",
 ]
 fixed-rng = ["random", "dep:lazy_static"]
