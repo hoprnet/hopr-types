@@ -66,8 +66,8 @@ macro_rules! assert_signed_eq {
             s,
             "{}: signed transaction mismatch\n  bindings: {}\n  static  : {}",
             $label,
-            hex::encode(&*b),
-            hex::encode(&*s),
+            const_hex::encode(&*b),
+            const_hex::encode(&*s),
         );
     }};
 }

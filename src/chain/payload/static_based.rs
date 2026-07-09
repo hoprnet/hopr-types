@@ -520,12 +520,9 @@ impl SignableTransaction for TransactionRequest {
         let hash: [u8; 32] = Keccak256::digest(&to_sign).into();
 
         // Sign with k256
-        let signing_key =
-            k256::ecdsa::SigningKey::from_bytes(chain_keypair.secret().as_ref().into())
-                .map_err(|e| SigningError(e.into()))?;
-        let (sig, rec_id) = signing_key
-            .sign_prehash_recoverable(&hash)
+        let signing_key = k256::ecdsa::SigningKey::from_slice(chain_keypair.secret().as_ref())
             .map_err(|e| SigningError(e.into()))?;
+        let (sig, rec_id) = signing_key.sign_prehash_recoverable(&hash);
         let sig_bytes = sig.to_bytes();
         let y_parity = rec_id.to_byte() as u64;
         let mut r = [0u8; 32];
@@ -884,7 +881,7 @@ mod tests {
             .announce(ad, 100_u32.into())?
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_0)
             .await?;
-        insta::assert_snapshot!("announce_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("announce_basic", const_hex::encode(signed_tx));
 
         let test_multiaddr_reannounce = Multiaddr::from_str("/ip4/5.6.7.8/tcp/99")?;
         let ad_reannounce = AnnouncementData::new(kb, Some(test_multiaddr_reannounce))?;
@@ -892,7 +889,7 @@ mod tests {
             .announce(ad_reannounce, 0_u32.into())?
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_0)
             .await?;
-        insta::assert_snapshot!("announce_safe", hex::encode(signed_tx.clone()));
+        insta::assert_snapshot!("announce_safe", const_hex::encode(signed_tx.clone()));
 
         Ok(())
     }
@@ -906,7 +903,7 @@ mod tests {
             .redeem_ticket(acked_ticket)?
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob)
             .await?;
-        insta::assert_snapshot!("redeem_ticket_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("redeem_ticket_basic", const_hex::encode(signed_tx));
         Ok(())
     }
 
@@ -920,7 +917,7 @@ mod tests {
             .redeem_ticket(acked_ticket)?
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
             .await?;
-        insta::assert_snapshot!("redeem_ticket_safe", hex::encode(signed_tx));
+        insta::assert_snapshot!("redeem_ticket_safe", const_hex::encode(signed_tx));
         Ok(())
     }
 
@@ -934,7 +931,7 @@ mod tests {
         let signed_tx = tx
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob)
             .await?;
-        insta::assert_snapshot!("withdraw_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("withdraw_basic", const_hex::encode(signed_tx));
 
         let generator = SafePayloadGenerator::new(
             &chain_key_alice,
@@ -945,7 +942,7 @@ mod tests {
         let signed_tx = tx
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
             .await?;
-        insta::assert_snapshot!("withdraw_safe", hex::encode(signed_tx));
+        insta::assert_snapshot!("withdraw_safe", const_hex::encode(signed_tx));
 
         Ok(())
     }

@@ -30,11 +30,9 @@ pub trait EcdsaEngine {
 pub struct K256EcdsaSigningEngine;
 impl EcdsaEngine for K256EcdsaSigningEngine {
     fn sign_hash(hash: &Hash, chain_keypair: &ChainKeypair) -> Result<RawSignature, CryptoError> {
-        let key = k256::ecdsa::SigningKey::from_bytes(chain_keypair.secret().as_ref().into())
+        let key = k256::ecdsa::SigningKey::from_slice(chain_keypair.secret().as_ref())
             .map_err(|_| CryptoError::InvalidInputValue("chain_keypair"))?;
-        let (sig, rec) = key
-            .sign_prehash_recoverable(hash.as_ref())
-            .map_err(|_| CryptoError::CalculationError)?;
+        let (sig, rec) = key.sign_prehash_recoverable(hash.as_ref());
 
         Ok((sig.to_bytes().into(), rec.to_byte()))
     }
