@@ -289,6 +289,8 @@ impl OffchainSignature {
         let entries = entries.into_iter();
         let (lower, _) = entries.size_hint();
 
+        // Build all batch inputs in one pass. `owned_msgs` keeps the message bytes alive
+        // for the borrowed slices passed to dalek without an intermediate tuple Vec.
         let mut owned_msgs: Vec<M> = Vec::with_capacity(lower);
         let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(lower);
         let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(lower);

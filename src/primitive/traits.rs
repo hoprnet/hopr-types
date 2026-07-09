@@ -98,6 +98,8 @@ impl<T: BytesRepresentable> ToHex for T {
                 .unwrap_or(str);
 
             let half_len = data.len() / 2;
+            // `half_len` is the decoded byte length; common fixed-size values fit in the
+            // stack buffer, while larger inputs use the heap fallback below.
             if half_len <= HEX_DECODE_STACK_BUF_SIZE {
                 let mut buf = [0u8; HEX_DECODE_STACK_BUF_SIZE];
                 const_hex::decode_to_slice(data, &mut buf[..half_len])
@@ -182,7 +184,9 @@ mod tests {
 
         fn try_from(value: &[u8]) -> Result<Self> {
             Ok(Self(
-                value.try_into().map_err(|_| ParseError("TestBytes".into()))?,
+                value
+                    .try_into()
+                    .map_err(|_| ParseError("TestBytes".into()))?,
             ))
         }
     }

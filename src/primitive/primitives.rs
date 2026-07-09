@@ -67,6 +67,8 @@ impl Address {
     /// Turns the address into a checksum-ed address string
     /// according to [EIP-55](https://eips.ethereum.org/EIPS/eip-55).
     pub fn to_checksum(&self) -> String {
+        // EIP-55 hashes the lowercase hex address without `0x`; the stack buffer avoids
+        // allocating an intermediate String before hashing and case selection.
         let mut hex_buf = [0u8; Self::SIZE * 2];
         const_hex::encode_to_slice(self.0, &mut hex_buf)
             .expect("hex_buf is exactly sized for Address::SIZE bytes");

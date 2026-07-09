@@ -825,7 +825,8 @@ impl TryFrom<&[u8]> for PublicKey {
                 Ok(key.to_nonidentity().into())
             }
             Self::SIZE_UNCOMPRESSED_PLAIN => {
-                // add 0x04 prefix
+                // Add the SEC1 uncompressed prefix in a stack buffer; `from_sec1_bytes`
+                // requires the prefixed form, and concat would allocate for every parse.
                 let mut buf = [0u8; Self::SIZE_UNCOMPRESSED];
                 buf[0] = 4;
                 buf[1..].copy_from_slice(value);

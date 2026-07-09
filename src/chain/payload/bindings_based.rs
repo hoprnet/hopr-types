@@ -222,6 +222,8 @@ impl PayloadGenerator for BasicPayloadGenerator {
         let call_data = sendCall {
             recipient: self.contract_addrs.announcements,
             amount: alloy::primitives::U256::from_be_slice(&key_binding_fee.amount().to_be_bytes()),
+            // `KeyBindAndAnnouncePayload` ABI-encodes as a dynamic tuple; `sendCall`
+            // needs the tuple tail. `Bytes::slice` keeps this as a shared view, not a copy.
             data: alloy::primitives::Bytes::from(inner_payload).slice(32..),
         }
         .abi_encode();
@@ -358,6 +360,8 @@ impl PayloadGenerator for BasicPayloadGenerator {
             b256!("dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45")
         };
 
+        // `UserData` is passed as dynamic call data inside `sendCall`; drop the leading
+        // ABI head through a shared `Bytes` view instead of copying the tail.
         let user_data = alloy::primitives::Bytes::from(
             UserData {
                 functionIdentifier: function_identifier,
@@ -462,6 +466,8 @@ impl PayloadGenerator for SafePayloadGenerator {
         let call_data = sendCall {
             recipient: self.contract_addrs.announcements,
             amount: alloy::primitives::U256::from_be_slice(&key_binding_fee.amount().to_be_bytes()),
+            // `KeyBindAndAnnouncePayload` ABI-encodes as a dynamic tuple; `sendCall`
+            // needs the tuple tail. `Bytes::slice` keeps this as a shared view, not a copy.
             data: alloy::primitives::Bytes::from(inner_payload).slice(32..),
         }
         .abi_encode();
