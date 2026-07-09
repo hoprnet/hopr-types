@@ -67,9 +67,13 @@ impl Address {
     /// Turns the address into a checksum-ed address string
     /// according to [EIP-55](https://eips.ethereum.org/EIPS/eip-55).
     pub fn to_checksum(&self) -> String {
-        let address_hex = const_hex::encode(self.0);
+        let mut hex_buf = [0u8; Self::SIZE * 2];
+        const_hex::encode_to_slice(self.0, &mut hex_buf)
+            .expect("hex_buf is exactly sized for Address::SIZE bytes");
+        let address_hex =
+            std::str::from_utf8(&hex_buf).expect("const_hex output is always valid UTF-8");
 
-        let hash = sha3::Keccak256::digest(address_hex.as_bytes());
+        let hash = sha3::Keccak256::digest(hex_buf);
 
         let mut ret = String::with_capacity(Self::SIZE * 2 + 2);
         ret.push_str("0x");
