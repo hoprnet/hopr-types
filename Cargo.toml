@@ -83,12 +83,13 @@ serde = [
   "dep:serde_bytes",
   "babyjubjub-ec/serde",
   "chrono/serde",
-  "primitive-types/serde",
   "curve25519-dalek/serde",
+  "elliptic-curve/serde",
   "ed25519-dalek/serde",
   "hybrid-array/serde",
   "k256/serde",
   "libp2p-identity/serde",
+  "primitive-types/serde",
 ]
 fixed-rng = ["random", "dep:lazy_static"]
 rayon = ["internal", "dep:rayon"]
