@@ -37,8 +37,9 @@ use hopr_bindings::{
     hopr_token::HoprToken::{approveCall, sendCall, transferCall},
 };
 
+use hopr_bindings::ContractAddresses;
+
 use crate::chain::{
-    ContractAddresses, a2al,
     errors::{
         ChainTypesError,
         ChainTypesError::{InvalidArguments, InvalidState, SigningError},
@@ -46,6 +47,13 @@ use crate::chain::{
     payload,
     payload::{GasEstimation, PayloadGenerator, SignableTransaction},
 };
+
+#[inline]
+fn a2al(
+    a: crate::primitive::prelude::Address,
+) -> hopr_bindings::exports::alloy::primitives::Address {
+    hopr_bindings::exports::alloy::primitives::Address::from_slice(a.as_ref())
+}
 
 const DEFAULT_TX_GAS: u64 = 400_000;
 
@@ -708,46 +716,18 @@ pub(crate) mod tests {
     use crate::crypto::prelude::*;
     use crate::internal::prelude::*;
     use crate::primitive::prelude::*;
-    use hex_literal::hex;
     use multiaddr::Multiaddr;
 
-    use crate::chain::payload::{
-        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
-        tests::CONTRACT_ADDRS,
+    use super::{BasicPayloadGenerator, SafePayloadGenerator};
+    use crate::chain::payload::tests::{
+        CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
     };
-
-    const PRIVATE_KEY_1: [u8; 32] =
-        hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
-    const PRIVATE_KEY_2: [u8; 32] =
-        hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
+    use crate::chain::payload::{PayloadGenerator, SignableTransaction};
 
     lazy_static::lazy_static! {
-        static ref REDEEMABLE_TICKET: RedeemableTicket = postcard::from_bytes(&hex!(
-            "bea83ba0fcee21da44a30c893f466e6bf0c29bbb0530783365387bffffffffffffff010000000000000000000000000000000000000000014038536c412ff92c3b070d98724a2ac167b7a914aa2151cf71eea3d192b0df195d0184aa92c73bccb27aded5f27fcd1cdcf65889f78cf2e62d2f630f659aa2fba220cba79e6dc2ea1205cb76833c9223cd912f056f3406d73d0d689602afe5e88abc668430def9eacd2b5064acf85d73fb0b351a1c8c20d7f3fa28f0caa757e81226e1ee86a9efdbe7991442286183797296ebaa4d292a2005a089ed04b7dbb28ad1c9074f13d10115b0002ca88f4d68ce14549099773c192103d14016cbfa555574e8a5a8fbcb52677dfb7e9267e99c05ebe29603e41b33327705ddecfc569b0125d1ae9a3d3cb637a3c8c9eaafe90e6a1877292227065fbdcc897e95962ce1604fb644782e9029a046650ed84c4f1043b753959d7819f53cec200000000000000000000000000000000000000000000000000000000000000000"
-        )).unwrap();
+        static ref CONTRACT_ADDRS: hopr_bindings::ContractAddresses =
+            serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
     }
-
-    // Use this to generate the REDEEMABLE_TICKET variable above
-    // #[test]
-    // fn gen_ticket() -> anyhow::Result<()> {
-    // use crate::crypto::crypto_traits::Randomizable;
-    //
-    // let hk1 = HalfKey::random();
-    // let hk2 = HalfKey::random();
-    //
-    // let ticket = TicketBuilder::default()
-    // .counterparty(&ChainKeypair::from_secret(&PRIVATE_KEY_2)?)
-    // .amount(1000)
-    // .index(123)
-    // .channel_epoch(1)
-    // .eth_challenge(EthereumChallenge::default())
-    // .build_signed(&ChainKeypair::from_secret(&PRIVATE_KEY_1)?, &Default::default())?
-    // .into_acknowledged(Response::from_half_keys(&hk1, &hk2)?)
-    // .into_redeemable(&&ChainKeypair::from_secret(&PRIVATE_KEY_2)?, &Default::default())?;
-    //
-    // assert_eq!("", hex::encode(postcard::to_allocvec(&ticket)?));
-    // Ok(())
-    // }
 
     #[tokio::test]
     async fn test_announce() -> anyhow::Result<()> {
