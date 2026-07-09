@@ -352,33 +352,22 @@ impl PayloadGenerator for BasicPayloadGenerator {
         ))
         .map_err(|e| ChainTypesError::ParseError(e.into()))?;
 
-        let user_data = if include_node {
-            alloy::primitives::Bytes::from(
-                UserData {
-                    functionIdentifier: b256!(
-                        "0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc"
-                    ),
-                    nonce,
-                    defaultTarget: default_target.into(),
-                    admins,
-                }
-                .abi_encode(),
-            )
-            .slice(32..)
+        let function_identifier = if include_node {
+            b256!("0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc")
         } else {
-            alloy::primitives::Bytes::from(
-                UserData {
-                    functionIdentifier: b256!(
-                        "dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45"
-                    ),
-                    nonce,
-                    defaultTarget: default_target.into(),
-                    admins,
-                }
-                .abi_encode(),
-            )
-            .slice(32..)
+            b256!("dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45")
         };
+
+        let user_data = alloy::primitives::Bytes::from(
+            UserData {
+                functionIdentifier: function_identifier,
+                nonce,
+                defaultTarget: default_target.into(),
+                admins,
+            }
+            .abi_encode(),
+        )
+        .slice(32..);
 
         let tx_payload = sendCall {
             recipient: self.contract_addrs.node_stake_factory,
