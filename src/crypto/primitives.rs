@@ -84,7 +84,6 @@ impl<T: KeyIvInit> std::fmt::Debug for IvKey<T> {
     }
 }
 
-#[allow(deprecated)]
 impl<T: KeyIvInit> IvKey<T> {
     /// Total size of the key and IV in bytes.
     pub const SIZE: usize = T::KeySize::USIZE + T::IvSize::USIZE;
@@ -92,7 +91,9 @@ impl<T: KeyIvInit> IvKey<T> {
     /// Returns the IV part.
     #[inline]
     pub fn iv(&self) -> &Iv<T> {
-        Iv::<T>::from_slice(&self.0[0..T::IvSize::USIZE])
+        (&self.0[0..T::IvSize::USIZE])
+            .try_into()
+            .expect("iv is always the correct length")
     }
 
     /// Returns IV as a mutable slice.
@@ -104,7 +105,9 @@ impl<T: KeyIvInit> IvKey<T> {
     /// Returns the key part.
     #[inline]
     pub fn key(&self) -> &Key<T> {
-        Key::<T>::from_slice(&self.0[T::IvSize::USIZE..])
+        (&self.0[T::IvSize::USIZE..])
+            .try_into()
+            .expect("key is always the correct length")
     }
 
     /// Returns the key as a mutable slice.
