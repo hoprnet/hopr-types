@@ -1169,10 +1169,12 @@ dependencies = [
  "elliptic-curve 0.14.1",
  "ff 0.14.0",
  "group 0.14.0",
+ "hash2curve",
  "num-traits",
  "rand_core 0.10.1",
  "serde",
  "serdect 0.4.3",
+ "sha2 0.11.0",
  "subtle",
  "taceo-ark-babyjubjub",
 ]
@@ -2732,7 +2734,7 @@ dependencies = [
 
 [[package]]
 name = "hopr-types"
-version = "1.11.2"
+version = "1.11.3"
 dependencies = [
  "aes",
  "anyhow",
