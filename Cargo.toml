@@ -237,3 +237,8 @@ harness = false
 [[bench]]
 name = "vrf_bench"
 harness = false
+
+[[bench]]
+name = "memory_allocation_bench"
+harness = false
+required-features = ["use-bindings"]
