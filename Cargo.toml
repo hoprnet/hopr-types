@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.11.0"
+version = "1.11.1"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -80,6 +80,7 @@ chain = ["internal", "dep:anyhow", "dep:rlp", "dep:serde", "dep:serde_with"]
 serde = [
   "dep:serde",
   "dep:serde_bytes",
+  "babyjubjub-ec/serde",
   "chrono/serde",
   "primitive-types/serde",
   "curve25519-dalek/serde",
@@ -116,7 +117,7 @@ anyhow = { version = "1.0.103", optional = true }
 aquamarine = { version = "0.6.0", optional = true }
 arrayvec = { version = "0.7.8", optional = true }
 async-trait = { version = "0.1.89", optional = true }
-babyjubjub-ec = { version = "0.3.2", optional = true }
+babyjubjub-ec = { version = "0.3.4", optional = true }
 bigdecimal = { version = "0.4.10", optional = true }
 blake3 = { version = "=1.8.5", optional = true, features = ["traits-preview"] }
 chacha20 = { version = "0.10.1", optional = true }

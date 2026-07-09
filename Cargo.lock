@@ -1085,9 +1085,9 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "babyjubjub-ec"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a415244f8363f55605effaefd7f74a3652134c479e236625265abcf4ae63e5b"
+checksum = "46640eb34526dce0693441111ab89a376857d4c91f71cd8a4b97490bd5a9b847"
 dependencies = [
  "ark-ec",
  "ark-ff 0.5.0",
@@ -1097,8 +1097,10 @@ dependencies = [
  "group 0.14.0",
  "num-traits",
  "rand_core 0.10.1",
+ "serde",
  "subtle",
  "taceo-ark-babyjubjub",
+ "zeroize",
 ]
 
 [[package]]
@@ -2620,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "hopr-types"
-version = "1.11.0"
+version = "1.11.1"
 dependencies = [
  "aes",
  "anyhow",
@@ -2985,7 +2987,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.5",
+ "hashbrown 0.16.1",
  "serde",
  "serde_core",
 ]
@@ -5571,6 +5573,7 @@ version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 dependencies = [
+ "serde",
  "zeroize_derive",
 ]
 

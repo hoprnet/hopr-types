@@ -10,10 +10,16 @@ use crate::crypto::{
 /// AES with 128-bit key in counter-mode (with big-endian counter).
 pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
+/// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
+pub use babyjubjub_ec::{
+    BabyJubJub, GroupRepr as BabyJubJubCompressedPoint, Scalar as BabyJubJubScalar,
+};
 /// Blake3 hash function, re-exported from the [`blake3`] crate.
 pub use blake3::{Hasher as Blake3, OutputReader as Blake3Output, hash as blake3_hash};
 /// ChaCha20 stream cipher, re-exported from the [`chacha20`] crate.
 pub use chacha20::ChaCha20;
+/// Secp256k1 elliptic curve, re-exported from the [`k256`] crate.
+pub use k256::{CompressedPoint as K256CompressedPoint, Scalar as K256Scalar, Secp256k1};
 /// Poly1305 one-time authenticator, re-exported from the [`poly1305`] crate.
 pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
