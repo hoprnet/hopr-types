@@ -1,4 +1,3 @@
-use crate::crypto_random::random_bytes;
 use crate::primitive::prelude::*;
 use k256::{
     AffinePoint, Scalar, Secp256k1,
@@ -14,6 +13,7 @@ use crate::crypto::{
     types::{PublicKey, affine_point_from_bytes},
     utils::k256_scalar_from_bytes,
 };
+use crate::crypto_random::random_bytes;
 use hash2curve::ExpandMsgXmd;
 
 /// Bundles values given to the smart contract to prove that a ticket is a win.
