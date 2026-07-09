@@ -81,6 +81,10 @@ pub trait BytesRepresentable<E = GeneralError>:
     }
 }
 
+/// Stack buffer size used by [`ToHex::from_hex`]'s fast decode path. Sized comfortably above the
+/// largest known `BytesRepresentable::SIZE` in this crate (96 bytes, for `Acknowledgement`).
+const HEX_DECODE_STACK_BUF_SIZE: usize = 128;
+
 impl<T: BytesRepresentable> ToHex for T {
     fn to_hex(&self) -> String {
         format!("0x{}", const_hex::encode(self.as_ref()))
@@ -92,6 +96,14 @@ impl<T: BytesRepresentable> ToHex for T {
                 .strip_prefix("0x")
                 .or_else(|| str.strip_prefix("0X"))
                 .unwrap_or(str);
+
+            let half_len = data.len() / 2;
+            if half_len <= HEX_DECODE_STACK_BUF_SIZE {
+                let mut buf = [0u8; HEX_DECODE_STACK_BUF_SIZE];
+                const_hex::decode_to_slice(data, &mut buf[..half_len])
+                    .map_err(|e| ParseError(e.to_string()))?;
+                return T::try_from(&buf[..half_len]);
+            }
 
             const_hex::decode(data)
                 .map_err(|e| ParseError(e.to_string()))
