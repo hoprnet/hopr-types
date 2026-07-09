@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use crate::crypto_random::{Randomizable, random_bytes};
 use crate::primitive::prelude::*;
 use digest::Digest;
-use generic_array::{ArrayLength, GenericArray};
+use hybrid_array::Array;
+use hybrid_array::ArraySize;
 #[cfg(feature = "crypto")]
 use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
@@ -21,7 +22,7 @@ use crate::crypto::{
 /// Must be comparable in constant time and zeroized on drop.
 pub trait Keypair: ConstantTimeEq + Sized {
     /// Represents the type of the private (secret) key
-    type SecretLen: ArrayLength;
+    type SecretLen: ArraySize;
 
     /// Represents the type of the public key
     type Public: BytesRepresentable + Clone + PartialEq;
@@ -119,7 +120,7 @@ impl Keypair for ChainKeypair {
 
     fn random() -> Self {
         let (secret, public) = random_group_element();
-        Self(GenericArray::from(secret).into(), public.into())
+        Self(Array(secret).into(), public.into())
     }
 
     fn from_secret(bytes: &[u8]) -> errors::Result<Self> {

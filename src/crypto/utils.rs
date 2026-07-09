@@ -1,6 +1,6 @@
 use crate::crypto_random::{Randomizable, random_array};
-use generic_array::{ArrayLength, GenericArray};
 use hash2curve::ExpandMsgXmd;
+use hybrid_array::{Array, ArraySize};
 use k256::{
     AffinePoint, Secp256k1,
     elliptic_curve::{PrimeField, point::NonIdentity},
@@ -62,7 +62,7 @@ pub fn x25519_scalar_from_bytes(
 
 /// Creates secp256k1 secret scalar from the given bytes.
 /// Note that this function allows zero scalars.
-#[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
+#[allow(deprecated)]
 pub fn k256_scalar_from_bytes(bytes: &[u8]) -> crate::crypto::errors::Result<k256::Scalar> {
     if bytes.len() == k256::elliptic_curve::FieldBytesSize::<Secp256k1>::to_usize() {
         Option::from(k256::Scalar::from_repr(*k256::FieldBytes::from_slice(
@@ -103,57 +103,59 @@ pub fn sample_secp256k1_field_element(
 /// Secret values are always compared in constant time.
 /// The default value is all zeroes.
 #[derive(Clone, zeroize::ZeroizeOnDrop)]
-pub struct SecretValue<L: ArrayLength>(GenericArray<u8, L>);
+pub struct SecretValue<L: ArraySize>(Array<u8, L>);
 
-impl<L: ArrayLength> ConstantTimeEq for SecretValue<L> {
+impl<L: ArraySize> ConstantTimeEq for SecretValue<L> {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
     }
 }
 
-impl<L: ArrayLength> AsRef<[u8]> for SecretValue<L> {
+impl<L: ArraySize> AsRef<[u8]> for SecretValue<L> {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<L: ArrayLength> From<GenericArray<u8, L>> for SecretValue<L> {
-    fn from(value: GenericArray<u8, L>) -> Self {
+impl<L: ArraySize> From<Array<u8, L>> for SecretValue<L> {
+    fn from(value: Array<u8, L>) -> Self {
         Self(value)
     }
 }
 
-impl<'a, L: ArrayLength> From<&'a SecretValue<L>> for &'a GenericArray<u8, L> {
+impl<'a, L: ArraySize> From<&'a SecretValue<L>> for &'a Array<u8, L> {
     fn from(value: &'a SecretValue<L>) -> Self {
         &value.0
     }
 }
 
-impl<L: ArrayLength> TryFrom<&[u8]> for SecretValue<L> {
+impl<L: ArraySize> TryFrom<&[u8]> for SecretValue<L> {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() == Self::LENGTH {
-            Ok(Self(GenericArray::from_slice(value).clone()))
+            let mut arr: Array<u8, L> = Default::default();
+            arr.copy_from_slice(value);
+            Ok(Self(arr))
         } else {
             Err(InvalidInputValue("value"))
         }
     }
 }
 
-impl<L: ArrayLength> Default for SecretValue<L> {
+impl<L: ArraySize> Default for SecretValue<L> {
     fn default() -> Self {
-        Self(GenericArray::default())
+        Self(Array::default())
     }
 }
 
-impl<L: ArrayLength> AsMut<[u8]> for SecretValue<L> {
+impl<L: ArraySize> AsMut<[u8]> for SecretValue<L> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.0.as_mut()
     }
 }
 
-impl<L: ArrayLength> From<SecretValue<L>> for Box<[u8]> {
+impl<L: ArraySize> From<SecretValue<L>> for Box<[u8]> {
     fn from(value: SecretValue<L>) -> Self {
         value.as_ref().into()
     }
@@ -161,24 +163,24 @@ impl<L: ArrayLength> From<SecretValue<L>> for Box<[u8]> {
 
 impl From<SecretValue<typenum::U32>> for [u8; 32] {
     fn from(value: SecretValue<typenum::U32>) -> Self {
-        value.0.into_array()
+        value.0.0
     }
 }
 
 impl From<[u8; 32]> for SecretValue<typenum::U32> {
     fn from(value: [u8; 32]) -> Self {
-        Self(value.into())
+        Self(Array(value))
     }
 }
 
-impl<L: ArrayLength> std::fmt::Debug for SecretValue<L> {
+impl<L: ArraySize> std::fmt::Debug for SecretValue<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("SecretValue").field(&"<redacted>").finish()
     }
 }
 
 #[cfg(feature = "serde")]
-impl<L: ArrayLength> serde::Serialize for SecretValue<L> {
+impl<L: ArraySize> serde::Serialize for SecretValue<L> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -188,21 +190,21 @@ impl<L: ArrayLength> serde::Serialize for SecretValue<L> {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, L: ArrayLength> serde::Deserialize<'de> for SecretValue<L> {
+impl<'de, L: ArraySize> serde::Deserialize<'de> for SecretValue<L> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        Ok(Self(GenericArray::deserialize(deserializer)?))
+        Ok(Self(Array::deserialize(deserializer)?))
     }
 }
 
-impl<L: ArrayLength> SecretValue<L> {
+impl<L: ArraySize> SecretValue<L> {
     /// Length of the secret value in bytes.
     pub const LENGTH: usize = L::USIZE;
 }
 
-impl<L: ArrayLength> Randomizable for SecretValue<L> {
+impl<L: ArraySize> Randomizable for SecretValue<L> {
     /// Generates cryptographically strong random secret value.
     fn random() -> Self {
         Self(random_array())

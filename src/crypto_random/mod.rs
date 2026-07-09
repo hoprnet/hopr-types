@@ -4,7 +4,7 @@
 //! Instead of relying on external crates, all HOPR crates in this monorepo should
 //! exclusively rely on randomness functions only from this crate.
 
-use generic_array::{ArrayLength, GenericArray};
+use hybrid_array::{Array, ArraySize};
 /// Re-export of the [`Rng`] trait for generic random value generation.
 pub use rand::Rng;
 use rand::{CryptoRng, RngExt};
@@ -94,9 +94,9 @@ pub fn random_bytes<const T: usize>() -> [u8; T] {
     ret
 }
 
-/// Allocates `GenericArray` of the given size and fills it with random bytes
-pub fn random_array<L: ArrayLength>() -> GenericArray<u8, L> {
-    let mut ret = GenericArray::default();
+/// Allocates `Array` of the given size and fills it with random bytes
+pub fn random_array<L: ArraySize>() -> Array<u8, L> {
+    let mut ret = Array::default();
     random_fill(&mut ret);
     ret
 }

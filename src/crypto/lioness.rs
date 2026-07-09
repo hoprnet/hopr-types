@@ -106,12 +106,12 @@ where
         let k = H::OutputSize::to_usize();
         let i = S::IvSize::to_usize();
         Self {
-            k1: Array::clone_from_slice(&key[0..k]),
-            k2: Array::clone_from_slice(&key[k..2 * k]),
-            k3: Array::clone_from_slice(&key[2 * k..3 * k]),
-            k4: Array::clone_from_slice(&key[3 * k..4 * k]),
-            iv1: Array::clone_from_slice(&iv[0..i]),
-            iv2: Array::clone_from_slice(&iv[i..2 * i]),
+            k1: Array::try_from(&key[0..k]).unwrap(),
+            k2: Array::try_from(&key[k..2 * k]).unwrap(),
+            k3: Array::try_from(&key[2 * k..3 * k]).unwrap(),
+            k4: Array::try_from(&key[3 * k..4 * k]).unwrap(),
+            iv1: Array::try_from(&iv[0..i]).unwrap(),
+            iv2: Array::try_from(&iv[i..2 * i]).unwrap(),
             _phantom: Default::default(),
         }
     }
@@ -154,16 +154,15 @@ where
     /// Performs encryption of the given `block`.
     pub fn encrypt_block(&self, mut block: InOut<'_, '_, Block<Self>>) {
         // L' = L ^ K1
-        let mut left_prime =
-            Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_in()[0..Self::K]);
+        let mut left_prime: Array<u8, <S as KeySizeUser>::KeySize> = Default::default();
+        left_prime.copy_from_slice(&block.get_in()[0..Self::K]);
         for i in 0..Self::K {
             left_prime[i] ^= self.k1[i];
         }
 
         // R = R ^ S(L', IV1)
-        let r_cpy = Array::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
-            &block.get_in()[Self::K..B::USIZE],
-        );
+        let mut r_cpy: Array<u8, Diff<B, <S as KeySizeUser>::KeySize>> = Default::default();
+        r_cpy.copy_from_slice(&block.get_in()[Self::K..B::USIZE]);
         S::new(&left_prime, &self.iv1)
             .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
 
@@ -178,9 +177,8 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
-            &block.get_out()[0..Self::K],
-        );
+        let mut left_prime: Array<u8, <S as KeySizeUser>::KeySize> = Default::default();
+        left_prime.copy_from_slice(&block.get_out()[0..Self::K]);
         for i in 0..Self::K {
             left_prime[i] ^= self.k3[i];
         }
@@ -211,17 +209,15 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
-            &block.get_out()[0..Self::K],
-        );
+        let mut left_prime: Array<u8, <S as KeySizeUser>::KeySize> = Default::default();
+        left_prime.copy_from_slice(&block.get_out()[0..Self::K]);
         for i in 0..Self::K {
             left_prime[i] ^= self.k3[i];
         }
 
         // R = R ^ S(L', IV2)
-        let r_cpy = Array::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
-            &block.get_in()[Self::K..B::USIZE],
-        );
+        let mut r_cpy: Array<u8, Diff<B, <S as KeySizeUser>::KeySize>> = Default::default();
+        r_cpy.copy_from_slice(&block.get_in()[Self::K..B::USIZE]);
         S::new(&left_prime, &self.iv2)
             .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
 
@@ -236,9 +232,8 @@ where
         }
 
         // L' = L ^ K1
-        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
-            &block.get_out()[0..Self::K],
-        );
+        let mut left_prime: Array<u8, <S as KeySizeUser>::KeySize> = Default::default();
+        left_prime.copy_from_slice(&block.get_out()[0..Self::K]);
         for i in 0..Self::K {
             left_prime[i] ^= self.k1[i];
         }
