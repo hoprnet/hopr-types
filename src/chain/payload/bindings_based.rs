@@ -222,7 +222,7 @@ impl PayloadGenerator for BasicPayloadGenerator {
         let call_data = sendCall {
             recipient: self.contract_addrs.announcements,
             amount: alloy::primitives::U256::from_be_slice(&key_binding_fee.amount().to_be_bytes()),
-            data: inner_payload[32..].to_vec().into(),
+            data: alloy::primitives::Bytes::from(inner_payload).slice(32..),
         }
         .abi_encode();
 
@@ -353,33 +353,37 @@ impl PayloadGenerator for BasicPayloadGenerator {
         .map_err(|e| ChainTypesError::ParseError(e.into()))?;
 
         let user_data = if include_node {
-            UserData {
-                functionIdentifier: b256!(
-                    "0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc"
-                ),
-                nonce,
-                defaultTarget: default_target.into(),
-                admins,
-            }
-            .abi_encode()[32..]
-                .to_vec()
+            alloy::primitives::Bytes::from(
+                UserData {
+                    functionIdentifier: b256!(
+                        "0105b97dcdf19d454ebe36f91ed516c2b90ee79f4a46af96a0138c1f5403c1cc"
+                    ),
+                    nonce,
+                    defaultTarget: default_target.into(),
+                    admins,
+                }
+                .abi_encode(),
+            )
+            .slice(32..)
         } else {
-            UserData {
-                functionIdentifier: b256!(
-                    "dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45"
-                ),
-                nonce,
-                defaultTarget: default_target.into(),
-                admins,
-            }
-            .abi_encode()[32..]
-                .to_vec()
+            alloy::primitives::Bytes::from(
+                UserData {
+                    functionIdentifier: b256!(
+                        "dd24c144db91d1bc600aac99393baf8f8c664ba461188f057e37f2c37b962b45"
+                    ),
+                    nonce,
+                    defaultTarget: default_target.into(),
+                    admins,
+                }
+                .abi_encode(),
+            )
+            .slice(32..)
         };
 
         let tx_payload = sendCall {
             recipient: self.contract_addrs.node_stake_factory,
             amount: alloy::primitives::U256::from_be_slice(&balance.amount().to_be_bytes()),
-            data: user_data.into(),
+            data: user_data,
         }
         .abi_encode();
 
@@ -469,7 +473,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         let call_data = sendCall {
             recipient: self.contract_addrs.announcements,
             amount: alloy::primitives::U256::from_be_slice(&key_binding_fee.amount().to_be_bytes()),
-            data: inner_payload[32..].to_vec().into(),
+            data: alloy::primitives::Bytes::from(inner_payload).slice(32..),
         }
         .abi_encode();
 
