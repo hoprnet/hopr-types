@@ -306,15 +306,15 @@ mod tests {
     use hex_literal::hex;
 
     use super::*;
+    use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2};
     use crate::chain::payload::{
         BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
-        tests::CONTRACT_ADDRS,
     };
 
-    const PRIVATE_KEY_1: [u8; 32] =
-        hex!("c14b8faa0a9b8a5fa4453664996f23a7e7de606d42297d723fc4a794f375e260");
-    const PRIVATE_KEY_2: [u8; 32] =
-        hex!("492057cf93e99b31d2a85bc5e98a9c3aa0021feec52c227cc8170e8f7d047775");
+    lazy_static::lazy_static! {
+        pub static ref CONTRACT_ADDRS: crate::chain::ContractAddresses =
+            serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
+    }
 
     #[tokio::test]
     async fn announce_safe_action_should_decode() -> anyhow::Result<()> {

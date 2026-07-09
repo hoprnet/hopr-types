@@ -18,7 +18,6 @@ pub use {
 };
 
 pub mod prelude {
-    #[cfg(feature = "use-bindings")]
     pub use super::payload::{BasicPayloadGenerator, SafePayloadGenerator, TransactionRequest};
     pub use super::{
         ContractAddresses,

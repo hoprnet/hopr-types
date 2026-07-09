@@ -75,7 +75,7 @@ internal = [
   "dep:strum",
   "dep:tracing",
 ]
-chain = ["internal", "dep:anyhow", "dep:serde", "dep:serde_with"]
+chain = ["internal", "dep:anyhow", "dep:rlp", "dep:serde", "dep:serde_with"]
 
 serde = [
   "dep:serde",
@@ -163,6 +163,7 @@ primitive-types = { version = "0.14.0", optional = true }
 rand = { version = "0.10.2", optional = true, features = ["thread_rng"] }
 rayon = { version = "1.12.0", optional = true }
 regex = { version = "1.12.4", optional = true }
+rlp = { version = "0.6.1", optional = true }
 secp256k1 = { version = "0.31.1", optional = true, default-features = false, features = [
   "alloc",
   "recovery",
@@ -190,6 +191,7 @@ uuid = { version = "1.23.4", optional = true, features = ["serde", "v4"] }
 zeroize = { version = "1.9.0", optional = true, features = ["zeroize_derive"] }
 
 [dev-dependencies]
+hopr-bindings = "4.9.1"
 anyhow = "1.0.102"
 bimap = "0.6.3"
 criterion = "0.8.2"
