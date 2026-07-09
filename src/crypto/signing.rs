@@ -286,18 +286,20 @@ impl OffchainSignature {
     >(
         entries: I,
     ) -> bool {
-        let (signed_msgs, pub_keys): (
-            Vec<(M, OffchainSignature)>,
-            Vec<ed25519_dalek::VerifyingKey>,
-        ) = entries
-            .into_iter()
-            .map(|(a, b)| (a, ed25519_dalek::VerifyingKey::from(b.edwards)))
-            .unzip();
+        let entries = entries.into_iter();
+        let (lower, _) = entries.size_hint();
 
-        let (msgs, signatures): (Vec<&[u8]>, Vec<ed25519_dalek::Signature>) = signed_msgs
-            .iter()
-            .map(|(a, b)| (a.as_ref(), ed25519_dalek::Signature::from_bytes(&b.0)))
-            .unzip();
+        let mut owned_msgs: Vec<M> = Vec::with_capacity(lower);
+        let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(lower);
+        let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(lower);
+
+        for ((msg, sig), pk) in entries {
+            owned_msgs.push(msg);
+            signatures.push(ed25519_dalek::Signature::from_bytes(&sig.0));
+            pub_keys.push(ed25519_dalek::VerifyingKey::from(pk.edwards));
+        }
+
+        let msgs: Vec<&[u8]> = owned_msgs.iter().map(AsRef::as_ref).collect();
 
         ed25519_dalek::verify_batch(&msgs, &signatures, &pub_keys).is_ok()
     }
