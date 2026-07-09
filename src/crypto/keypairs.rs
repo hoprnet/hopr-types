@@ -181,7 +181,7 @@ impl Keypair for BjjKeypair {
             ret = Self::from_secret(SecretValue::<typenum::U32>::random().as_ref());
         }
 
-        // Not error at this point
+        // Not an error at this point
         ret.unwrap()
     }
 

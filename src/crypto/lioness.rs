@@ -105,6 +105,8 @@ where
     fn new(key: &Key<Self>, iv: &Iv<Self>) -> Self {
         let k = H::OutputSize::to_usize();
         let i = S::IvSize::to_usize();
+        // These unwraps are safe because the key and iv are
+        // guaranteed to be the correct length by the type system
         Self {
             k1: Array::try_from(&key[0..k]).unwrap(),
             k2: Array::try_from(&key[k..2 * k]).unwrap(),
