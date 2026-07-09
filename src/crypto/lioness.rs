@@ -5,10 +5,10 @@
 //! as proposed by Ross Anderson and Eli Biham.
 use std::{fmt::Formatter, marker::PhantomData, ops::Sub};
 
-#[allow(deprecated)] // Until the crate updates to newer versions of `generic-array`
+use cipher::array::{Array, ArraySize};
 use cipher::{
-    AlgorithmName, ArrayLength, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit,
-    KeySizeUser, StreamCipher, generic_array::GenericArray, inout::InOut,
+    AlgorithmName, Block, BlockSizeUser, Iv, IvSizeUser, Key, KeyInit, KeyIvInit, KeySizeUser,
+    StreamCipher, inout::InOut,
 };
 use digest::{Digest, OutputSizeUser};
 use typenum::{B1, Diff, IsEqual, IsGreater, Unsigned};
@@ -29,7 +29,7 @@ use crate::crypto::crypto_traits::PRP;
 /// The IV size of the Lioness cipher is 2-times the size of the `StreamCipher`'s
 /// IV size.
 #[derive(Clone, zeroize::ZeroizeOnDrop)]
-pub struct Lioness<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>>
+pub struct Lioness<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArraySize>
 where
     // OutputSize of the digest must be
     // equal to the KeySize of the
@@ -40,16 +40,16 @@ where
     // BlockSize must be greater or equal to the KeySize of the stream cipher
     B: IsGreater<<S as KeySizeUser>::KeySize, Output = B1>,
 {
-    k1: GenericArray<u8, S::KeySize>,
-    k2: GenericArray<u8, H::KeySize>,
-    k3: GenericArray<u8, S::KeySize>,
-    k4: GenericArray<u8, H::KeySize>,
-    iv1: GenericArray<u8, S::IvSize>,
-    iv2: GenericArray<u8, S::IvSize>,
+    k1: Array<u8, S::KeySize>,
+    k2: Array<u8, H::KeySize>,
+    k3: Array<u8, S::KeySize>,
+    k4: Array<u8, H::KeySize>,
+    iv1: Array<u8, S::IvSize>,
+    iv2: Array<u8, S::IvSize>,
     _phantom: PhantomData<(H, S, B)>,
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeySizeUser
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArraySize> KeySizeUser
     for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
@@ -58,12 +58,12 @@ where
     // OutputSize must allow multiplication by U4
     H::OutputSize: std::ops::Mul<cipher::consts::U4>,
     // The product of OutputSize and U4 must be an array length
-    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArrayLength<u8>,
+    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArraySize,
 {
     type KeySize = typenum::Prod<H::OutputSize, cipher::consts::U4>;
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> IvSizeUser
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArraySize> IvSizeUser
     for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
@@ -72,12 +72,12 @@ where
     // IvSize must allow multiplication by U2
     S::IvSize: std::ops::Mul<cipher::consts::U2>,
     // The product of IvSize with U2 must be an array length
-    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArrayLength<u8>,
+    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArraySize,
 {
     type IvSize = typenum::Prod<S::IvSize, cipher::consts::U2>;
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> BlockSizeUser
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArraySize> BlockSizeUser
     for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
@@ -85,13 +85,13 @@ where
     B: IsGreater<<S as KeySizeUser>::KeySize, Output = B1>,
     H::OutputSize: std::ops::Mul<cipher::consts::U4>,
     S::IvSize: std::ops::Mul<cipher::consts::U2>,
-    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArrayLength<u8>,
-    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArrayLength<u8>,
+    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArraySize,
+    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArraySize,
 {
     type BlockSize = B;
 }
 
-impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArrayLength<u8>> KeyIvInit
+impl<H: KeySizeUser + OutputSizeUser, S: KeySizeUser + IvSizeUser, B: ArraySize> KeyIvInit
     for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<S::KeySize, Output = B1>,
@@ -99,19 +99,19 @@ where
     B: IsGreater<<S as KeySizeUser>::KeySize, Output = B1>,
     H::OutputSize: std::ops::Mul<cipher::consts::U4>,
     S::IvSize: std::ops::Mul<cipher::consts::U2>,
-    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArrayLength<u8>,
-    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArrayLength<u8>,
+    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArraySize,
+    <S::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArraySize,
 {
     fn new(key: &Key<Self>, iv: &Iv<Self>) -> Self {
         let k = H::OutputSize::to_usize();
         let i = S::IvSize::to_usize();
         Self {
-            k1: GenericArray::clone_from_slice(&key[0..k]),
-            k2: GenericArray::clone_from_slice(&key[k..2 * k]),
-            k3: GenericArray::clone_from_slice(&key[2 * k..3 * k]),
-            k4: GenericArray::clone_from_slice(&key[3 * k..4 * k]),
-            iv1: GenericArray::clone_from_slice(&iv[0..i]),
-            iv2: GenericArray::clone_from_slice(&iv[i..2 * i]),
+            k1: Array::clone_from_slice(&key[0..k]),
+            k2: Array::clone_from_slice(&key[k..2 * k]),
+            k3: Array::clone_from_slice(&key[2 * k..3 * k]),
+            k4: Array::clone_from_slice(&key[3 * k..4 * k]),
+            iv1: Array::clone_from_slice(&iv[0..i]),
+            iv2: Array::clone_from_slice(&iv[i..2 * i]),
             _phantom: Default::default(),
         }
     }
@@ -120,7 +120,7 @@ where
 impl<
     H: KeySizeUser + OutputSizeUser + AlgorithmName,
     S: AlgorithmName + KeySizeUser + IvSizeUser,
-    B: ArrayLength<u8>,
+    B: ArraySize,
 > AlgorithmName for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<<S as KeySizeUser>::KeySize, Output = B1>,
@@ -136,38 +136,36 @@ where
     }
 }
 
-impl<H: Digest + KeyInit, S: StreamCipher + KeyIvInit, B: ArrayLength<u8>> Lioness<H, S, B>
+impl<H: Digest + KeyInit, S: StreamCipher + KeyIvInit, B: ArraySize> Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<<S as KeySizeUser>::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
     // BlockSize must be greater than KeySize of the stream cipher, and they must be subtractable
     B: IsGreater<<S as KeySizeUser>::KeySize, Output = B1> + Sub<<S as KeySizeUser>::KeySize>,
     // The difference of BlockSize minus KeySize must be an array length
-    <B as Sub<<S as KeySizeUser>::KeySize>>::Output: ArrayLength<u8>,
+    <B as Sub<<S as KeySizeUser>::KeySize>>::Output: ArraySize,
     H::OutputSize: std::ops::Mul<cipher::consts::U4>,
     <S as IvSizeUser>::IvSize: std::ops::Mul<cipher::consts::U2>,
-    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArrayLength<u8>,
-    <<S as IvSizeUser>::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArrayLength<u8>,
+    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArraySize,
+    <<S as IvSizeUser>::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArraySize,
 {
     const K: usize = <S as KeySizeUser>::KeySize::USIZE;
 
     /// Performs encryption of the given `block`.
     pub fn encrypt_block(&self, mut block: InOut<'_, '_, Block<Self>>) {
         // L' = L ^ K1
-        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
-            &block.get_in()[0..Self::K],
-        );
+        let mut left_prime =
+            Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(&block.get_in()[0..Self::K]);
         for i in 0..Self::K {
             left_prime[i] ^= self.k1[i];
         }
 
         // R = R ^ S(L', IV1)
-        let r_cpy = GenericArray::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
+        let r_cpy = Array::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
             &block.get_in()[Self::K..B::USIZE],
         );
         S::new(&left_prime, &self.iv1)
-            .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE])
-            .expect("slices have always equal sizes");
+            .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
 
         // R' = H_K2(R)
         let r_prime = <H as KeyInit>::new(&self.k2)
@@ -180,7 +178,7 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
             &block.get_out()[0..Self::K],
         );
         for i in 0..Self::K {
@@ -213,7 +211,7 @@ where
         }
 
         // L' = L ^ K3
-        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
             &block.get_out()[0..Self::K],
         );
         for i in 0..Self::K {
@@ -221,12 +219,11 @@ where
         }
 
         // R = R ^ S(L', IV2)
-        let r_cpy = GenericArray::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
+        let r_cpy = Array::<u8, Diff<B, <S as KeySizeUser>::KeySize>>::clone_from_slice(
             &block.get_in()[Self::K..B::USIZE],
         );
         S::new(&left_prime, &self.iv2)
-            .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE])
-            .expect("slices have always equal sizes");
+            .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
 
         // R' = H(K2 || R)
         let r_prime = <H as KeyInit>::new(&self.k2)
@@ -239,7 +236,7 @@ where
         }
 
         // L' = L ^ K1
-        let mut left_prime = GenericArray::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
+        let mut left_prime = Array::<u8, <S as KeySizeUser>::KeySize>::clone_from_slice(
             &block.get_out()[0..Self::K],
         );
         for i in 0..Self::K {
@@ -251,16 +248,16 @@ where
     }
 }
 
-impl<H: Digest + KeyInit, S: StreamCipher + KeyIvInit, B: ArrayLength<u8>> PRP for Lioness<H, S, B>
+impl<H: Digest + KeyInit, S: StreamCipher + KeyIvInit, B: ArraySize> PRP for Lioness<H, S, B>
 where
     H::OutputSize: IsEqual<<S as KeySizeUser>::KeySize, Output = B1>,
     H::KeySize: IsEqual<S::KeySize, Output = B1>,
     B: IsGreater<<S as KeySizeUser>::KeySize, Output = B1> + Sub<<S as KeySizeUser>::KeySize>,
-    <B as Sub<<S as KeySizeUser>::KeySize>>::Output: ArrayLength<u8>,
+    <B as Sub<<S as KeySizeUser>::KeySize>>::Output: ArraySize,
     H::OutputSize: std::ops::Mul<cipher::consts::U4>,
     <S as IvSizeUser>::IvSize: std::ops::Mul<cipher::consts::U2>,
-    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArrayLength<u8>,
-    <<S as IvSizeUser>::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArrayLength<u8>,
+    <H::OutputSize as std::ops::Mul<cipher::consts::U4>>::Output: ArraySize,
+    <<S as IvSizeUser>::IvSize as std::ops::Mul<cipher::consts::U2>>::Output: ArraySize,
 {
     fn forward(&self, data: &mut Block<Self>) {
         self.encrypt_block(data.into());
@@ -305,7 +302,7 @@ mod tests {
     fn lioness_forward_inverse() {
         let lioness = LionessBlake3ChaCha20::<U1024>::new(&Default::default(), &Default::default());
 
-        let mut data = GenericArray::<u8, U1024>::default();
+        let mut data = Array::<u8, U1024>::default();
         let data_clone = data;
         assert_eq!(data, data_clone);
 
@@ -320,7 +317,7 @@ mod tests {
     fn lioness_forward_kat() {
         let lioness = LionessBlake3ChaCha20::<U33>::new(&Default::default(), &Default::default());
 
-        let mut data = GenericArray::<u8, U33>::default();
+        let mut data = Array::<u8, U33>::default();
 
         lioness.encrypt_block((&mut data).into());
         let ka = hex!("36690b60686f3c997a7bfb3808aa18a1b5808b750587ed04a01ebd836dd3ea97b4");
@@ -331,7 +328,7 @@ mod tests {
     fn lioness_inverse_kat() {
         let lioness = LionessBlake3ChaCha20::<U33>::new(&Default::default(), &Default::default());
 
-        let mut data = GenericArray::<u8, U33>::default();
+        let mut data = Array::<u8, U33>::default();
 
         lioness.decrypt_block((&mut data).into());
         let ka = hex!("7857b5bb58995ac8c59eff412dad35af72a7d1e1ff1caba132aef382b15789a6cb");
@@ -348,7 +345,7 @@ mod tests {
 
         let lioness = LionessBlake3ChaCha20::<U1024>::new(&k, &iv);
 
-        let mut data = GenericArray::<u8, U1024>::default();
+        let mut data = Array::<u8, U1024>::default();
         crate::crypto_random::random_fill(&mut data);
         let data_clone = data;
         assert_eq!(data, data_clone);
@@ -370,8 +367,8 @@ mod tests {
 
         let lioness = LionessBlake3ChaCha20::<U1024>::new(&k, &iv);
 
-        let mut data_in = GenericArray::<u8, U1024>::default();
-        let mut data_out = GenericArray::<u8, U1024>::default();
+        let mut data_in = Array::<u8, U1024>::default();
+        let mut data_out = Array::<u8, U1024>::default();
         crate::crypto_random::random_fill(&mut data_in);
         let data_orig = data_in;
         assert_eq!(data_in, data_orig);
@@ -380,7 +377,7 @@ mod tests {
         assert_ne!(data_out, data_orig);
 
         let data_in = data_out;
-        let mut data_out = GenericArray::<u8, U1024>::default();
+        let mut data_out = Array::<u8, U1024>::default();
         lioness.decrypt_block((&data_in, &mut data_out).into());
         assert_eq!(data_out, data_orig);
     }

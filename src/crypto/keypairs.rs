@@ -4,6 +4,7 @@ use crate::crypto_random::{Randomizable, random_bytes};
 use crate::primitive::prelude::*;
 use digest::Digest;
 use generic_array::{ArrayLength, GenericArray};
+#[cfg(feature = "crypto")]
 use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
 
@@ -84,7 +85,7 @@ impl From<&OffchainKeypair> for curve25519_dalek::scalar::Scalar {
     /// This is required so that the secret keys used to generate Sphinx shared secrets
     /// correspond to the public keys we get from the Ed25519 peer ids.
     fn from(value: &OffchainKeypair) -> Self {
-        let mut h: Sha512 = Sha512::default();
+        let mut h = Sha512::default();
         h.update(&value.0);
         let hash = h.finalize();
 

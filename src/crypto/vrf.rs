@@ -1,20 +1,20 @@
-use crate::crypto_random::random_bytes;
 use crate::primitive::prelude::*;
 use k256::{
     AffinePoint, Scalar, Secp256k1,
     elliptic_curve::{
         ProjectivePoint,
-        hash2curve::{ExpandMsgXmd, GroupDigest},
-        sec1::ToEncodedPoint,
+        sec1::{Sec1Point as EncodedPoint, ToSec1Point},
     },
 };
-
+type Sec1EncodedPoint = EncodedPoint<Secp256k1>;
 use crate::crypto::{
     errors::{CryptoError::CalculationError, Result},
     keypairs::{ChainKeypair, Keypair},
     types::{PublicKey, affine_point_from_bytes},
     utils::k256_scalar_from_bytes,
 };
+use crate::crypto_random::random_bytes;
+use hash2curve::ExpandMsgXmd;
 
 /// Bundles values given to the smart contract to prove that a ticket is a win.
 ///
@@ -33,7 +33,7 @@ pub struct VrfParameters {
 impl std::fmt::Debug for VrfParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VrfParameters")
-            .field("V", &const_hex::encode(self.V.to_encoded_point(true)))
+            .field("V", &const_hex::encode(self.V.to_sec1_point(true)))
             .field("h", &const_hex::encode(self.h.to_bytes()))
             .field("s", &const_hex::encode(self.s.to_bytes()))
             .finish()
@@ -43,8 +43,7 @@ impl std::fmt::Debug for VrfParameters {
 impl From<VrfParameters> for [u8; VRF_PARAMETERS_SIZE] {
     fn from(value: VrfParameters) -> Self {
         let mut ret = [0u8; VRF_PARAMETERS_SIZE];
-        ret[0..PublicKey::SIZE_COMPRESSED]
-            .copy_from_slice(value.V.to_encoded_point(true).as_bytes());
+        ret[0..PublicKey::SIZE_COMPRESSED].copy_from_slice(value.V.to_sec1_point(true).as_bytes());
         ret[PublicKey::SIZE_COMPRESSED..PublicKey::SIZE_COMPRESSED + 32]
             .copy_from_slice(value.h.to_bytes().as_ref());
         ret[PublicKey::SIZE_COMPRESSED + 32..PublicKey::SIZE_COMPRESSED + 64]
@@ -96,16 +95,17 @@ impl VrfParameters {
 
         let R_v: ProjectivePoint<Secp256k1> = cap_B * self.s - v_proj * self.h;
 
-        let h_check = Secp256k1::hash_to_scalar::<ExpandMsgXmd<sha3::Keccak256>>(
-            &[
-                creator.as_ref(),
-                &self.V.to_encoded_point(false).as_bytes()[1..],
-                &R_v.to_affine().to_encoded_point(false).as_bytes()[1..],
-                msg,
-            ],
-            &[dst],
-        )
-        .or(Err(CalculationError))?;
+        let h_check =
+            hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
+                &[
+                    creator.as_ref(),
+                    &self.V.to_sec1_point(false).to_bytes().as_ref()[1..],
+                    &R_v.to_affine().to_sec1_point(false).to_bytes().as_ref()[1..],
+                    msg,
+                ],
+                &[dst],
+            )
+            .map_err(|_| CalculationError)?;
 
         if h_check != self.h {
             return Err(CalculationError);
@@ -115,18 +115,18 @@ impl VrfParameters {
     }
 
     /// Returns the encoded VRF `V` value as an uncompressed point in affine coordinates.
-    pub fn get_v_encoded_point(&self) -> k256::EncodedPoint {
-        self.V.to_encoded_point(false)
+    pub fn get_v_encoded_point(&self) -> Sec1EncodedPoint {
+        self.V.to_sec1_point(false)
     }
 
     /// Performs a scalar point multiplication of `self.h` and `self.v`
     /// and returns the point in affine coordinates.
     ///
     /// Used to create the witness values needed by the smart contract.
-    pub fn get_h_v_witness(&self) -> k256::EncodedPoint {
+    pub fn get_h_v_witness(&self) -> Sec1EncodedPoint {
         (ProjectivePoint::<Secp256k1>::from(self.V) * self.h)
             .to_affine()
-            .to_encoded_point(false)
+            .to_sec1_point(false)
     }
 
     /// Performs a scalar point multiplication with the encoded payload
@@ -139,10 +139,10 @@ impl VrfParameters {
         creator: &Address,
         msg: &[u8; T],
         dst: &[u8],
-    ) -> Result<k256::EncodedPoint> {
+    ) -> Result<Sec1EncodedPoint> {
         Ok((self.get_encoded_payload(creator, msg, dst)? * self.s)
             .to_affine()
-            .to_encoded_point(false))
+            .to_sec1_point(false))
     }
 
     /// Takes the message upon which the VRF gets computed, the domain separation tag
@@ -157,11 +157,11 @@ impl VrfParameters {
         msg: &[u8; T],
         dst: &[u8],
     ) -> Result<k256::ProjectivePoint> {
-        Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+        hash2curve::hash_from_bytes::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>>(
             &[creator.as_ref(), msg],
             &[dst],
         )
-        .or(Err(CalculationError))
+        .map_err(|_| CalculationError)
     }
 }
 
@@ -176,35 +176,38 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     dst: &[u8],
 ) -> crate::crypto::errors::Result<VrfParameters> {
     let chain_addr = chain_keypair.public().to_address();
-    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+    let B = hash2curve::hash_from_bytes::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>>(
         &[chain_addr.as_ref(), msg.as_ref()],
         &[dst],
-    )?;
+    )
+    .map_err(|_| CalculationError)?;
 
     let a: Scalar = chain_keypair.into();
 
     let V = B * a;
 
-    let r = Secp256k1::hash_to_scalar::<ExpandMsgXmd<sha3::Keccak256>>(
+    let r = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
         &[
             &a.to_bytes(),
-            &V.to_affine().to_encoded_point(false).as_bytes()[1..],
+            &V.to_affine().to_sec1_point(false).to_bytes().as_ref()[1..],
             &random_bytes::<64>(),
         ],
         &[dst],
-    )?;
+    )
+    .map_err(|_| CalculationError)?;
 
     let R_v = B * r;
 
-    let h = Secp256k1::hash_to_scalar::<ExpandMsgXmd<sha3::Keccak256>>(
+    let h = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
         &[
             chain_addr.as_ref(),
-            &V.to_affine().to_encoded_point(false).as_bytes()[1..],
-            &R_v.to_affine().to_encoded_point(false).as_bytes()[1..],
+            &V.to_affine().to_sec1_point(false).to_bytes().as_ref()[1..],
+            &R_v.to_affine().to_sec1_point(false).to_bytes().as_ref()[1..],
             msg.as_ref(),
         ],
         &[dst],
-    )?;
+    )
+    .map_err(|_| CalculationError)?;
     let s = r + h * a;
 
     Ok(VrfParameters {
@@ -225,18 +228,20 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     dst: &[u8],
 ) -> Result<VrfParameters> {
     let chain_addr = chain_keypair.public().to_address();
-    let B = Secp256k1::hash_from_bytes::<ExpandMsgXmd<sha3::Keccak256>>(
+    let B = hash2curve::hash_from_bytes::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>>(
         &[chain_addr.as_ref(), msg.as_ref()],
         &[dst],
-    )?
+    )
+    .map_err(|_| CalculationError)?
     .to_affine();
 
     let a = secp256k1::Scalar::from_be_bytes(chain_keypair.secret().clone().into())
         .map_err(|_| crate::crypto::errors::CryptoError::InvalidSecretScalar)?;
 
     let B_pk = secp256k1::PublicKey::from_byte_array_uncompressed(
-        B.to_encoded_point(false)
-            .as_bytes()
+        B.to_sec1_point(false)
+            .to_bytes()
+            .as_ref()
             .try_into()
             .map_err(|_| crate::crypto::errors::CryptoError::InvalidPublicKey)?,
     )
@@ -246,14 +251,15 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
         .mul_tweak(secp256k1::global::SECP256K1, &a)
         .map_err(|_| CalculationError)?;
 
-    let r = Secp256k1::hash_to_scalar::<ExpandMsgXmd<sha3::Keccak256>>(
+    let r = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
         &[
             &a.to_be_bytes(),
             &V.serialize_uncompressed()[1..],
             &random_bytes::<64>(),
         ],
         &[dst],
-    )?;
+    )
+    .map_err(|_| CalculationError)?;
 
     let r_scalar = secp256k1::Scalar::from_be_bytes(r.to_bytes().into())
         .map_err(|_| crate::crypto::errors::CryptoError::InvalidSecretScalar)?;
@@ -262,7 +268,7 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
         .mul_tweak(secp256k1::global::SECP256K1, &r_scalar)
         .map_err(|_| CalculationError)?;
 
-    let h = Secp256k1::hash_to_scalar::<ExpandMsgXmd<sha3::Keccak256>>(
+    let h = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
         &[
             chain_addr.as_ref(),
             &V.serialize_uncompressed()[1..],
@@ -270,7 +276,8 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
             msg.as_ref(),
         ],
         &[dst],
-    )?;
+    )
+    .map_err(|_| CalculationError)?;
     let s = r + h * Scalar::from(chain_keypair);
 
     let V = affine_point_from_bytes(&V.serialize_uncompressed()).map_err(|_| CalculationError)?;
@@ -281,7 +288,6 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
 #[cfg(test)]
 mod tests {
     use hex_literal::hex;
-    use k256::elliptic_curve::ScalarPrimitive;
     use sha3::Keccak256;
 
     use super::*;
@@ -356,30 +362,30 @@ mod tests {
 
         let params = derive_vrf_parameters(message, &keypair, dst)?;
 
-        let cap_b = Secp256k1::hash_from_bytes::<ExpandMsgXmd<Keccak256>>(
+        let cap_b = hash2curve::hash_from_bytes::<Secp256k1, ExpandMsgXmd<Keccak256>>(
             &[pub_key.to_address().as_ref(), &message],
             &[dst],
         )?;
 
         assert_eq!(
             params.get_s_b_witness(&keypair.public().to_address(), &message, dst)?,
-            (cap_b * params.s).to_encoded_point(false)
+            (cap_b * params.s).to_sec1_point(false)
         );
 
-        let a: Scalar = ScalarPrimitive::<Secp256k1>::from_slice(&priv_key)?.into();
+        let a: Scalar = k256_scalar_from_bytes(&priv_key)?.into();
         assert_eq!(
             params.get_h_v_witness(),
-            (cap_b * a * params.h).to_encoded_point(false)
+            (cap_b * a * params.h).to_sec1_point(false)
         );
 
         let r_v: ProjectivePoint<Secp256k1> =
             cap_b * params.s - ProjectivePoint::<Secp256k1>::from(params.V) * params.h;
 
-        let h_check = Secp256k1::hash_to_scalar::<ExpandMsgXmd<Keccak256>>(
+        let h_check = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<Keccak256>, typenum::U48>(
             &[
                 pub_key.to_address().as_ref(),
-                &params.V.to_encoded_point(false).as_bytes()[1..],
-                &r_v.to_affine().to_encoded_point(false).as_bytes()[1..],
+                &params.V.to_sec1_point(false).to_bytes().as_ref()[1..],
+                &r_v.to_affine().to_sec1_point(false).to_bytes().as_ref()[1..],
                 &message,
             ],
             &[dst],

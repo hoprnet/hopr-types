@@ -1,12 +1,9 @@
 use crate::crypto_random::{Randomizable, random_array};
 use generic_array::{ArrayLength, GenericArray};
+use hash2curve::ExpandMsgXmd;
 use k256::{
     AffinePoint, Secp256k1,
-    elliptic_curve::{
-        PrimeField,
-        hash2curve::{ExpandMsgXmd, GroupDigest},
-        point::NonIdentity,
-    },
+    elliptic_curve::{PrimeField, point::NonIdentity},
 };
 use sha3::Sha3_256;
 use subtle::{Choice, ConstantTimeEq};
@@ -88,7 +85,7 @@ pub fn sample_secp256k1_field_element(
     tag: &str,
 ) -> crate::crypto::errors::Result<HalfKey> {
     if secret.len() >= SecretKey::LENGTH {
-        let scalar = Secp256k1::hash_to_scalar::<ExpandMsgXmd<Sha3_256>>(
+        let scalar = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<Sha3_256>, typenum::U48>(
             &[secret],
             &[b"secp256k1_XMD:SHA3-256_SSWU_RO_", tag.as_bytes()],
         )

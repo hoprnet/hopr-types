@@ -728,6 +728,28 @@ pub(crate) mod tests {
             serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();
     }
 
+    // Use this to generate the REDEEMABLE_TICKET variable above
+    // #[test]
+    // fn gen_ticket() -> anyhow::Result<()> {
+    // use crate::crypto::crypto_traits::Randomizable;
+    //
+    // let hk1 = HalfKey::random();
+    // let hk2 = HalfKey::random();
+    //
+    // let ticket = TicketBuilder::default()
+    // .counterparty(&ChainKeypair::from_secret(&PRIVATE_KEY_2)?)
+    // .amount(1000)
+    // .index(123)
+    // .channel_epoch(1)
+    // .eth_challenge(EthereumChallenge::default())
+    // .build_signed(&ChainKeypair::from_secret(&PRIVATE_KEY_1)?, &Default::default())?
+    // .into_acknowledged(Response::from_half_keys(&hk1, &hk2)?)
+    // .into_redeemable(&&ChainKeypair::from_secret(&PRIVATE_KEY_2)?, &Default::default())?;
+    //
+    // assert_eq!("", const_hex::encode(postcard::to_allocvec(&ticket)?));
+    // Ok(())
+    // }
+
     #[tokio::test]
     async fn test_announce() -> anyhow::Result<()> {
         let test_multiaddr = Multiaddr::from_str("/ip4/1.2.3.4/tcp/56")?;
@@ -747,7 +769,7 @@ pub(crate) mod tests {
             .announce(ad, 100_u32.into())?
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_0)
             .await?;
-        insta::assert_snapshot!("announce_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("announce_basic", const_hex::encode(signed_tx));
 
         let test_multiaddr_reannounce = Multiaddr::from_str("/ip4/5.6.7.8/tcp/99")?;
         let ad_reannounce = AnnouncementData::new(kb, Some(test_multiaddr_reannounce))?;
@@ -756,7 +778,7 @@ pub(crate) mod tests {
             .announce(ad_reannounce, 0_u32.into())?
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_0)
             .await?;
-        insta::assert_snapshot!("announce_safe", hex::encode(signed_tx.clone()));
+        insta::assert_snapshot!("announce_safe", const_hex::encode(signed_tx.clone()));
 
         Ok(())
     }
@@ -774,7 +796,7 @@ pub(crate) mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob)
             .await?;
 
-        insta::assert_snapshot!("redeem_ticket_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("redeem_ticket_basic", const_hex::encode(signed_tx));
 
         Ok(())
     }
@@ -793,7 +815,7 @@ pub(crate) mod tests {
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
             .await?;
 
-        insta::assert_snapshot!("redeem_ticket_safe", hex::encode(signed_tx));
+        insta::assert_snapshot!("redeem_ticket_safe", const_hex::encode(signed_tx));
 
         Ok(())
     }
@@ -810,7 +832,7 @@ pub(crate) mod tests {
             .sign_and_encode_to_eip2718(1, 1, None, &chain_key_bob)
             .await?;
 
-        insta::assert_snapshot!("withdraw_basic", hex::encode(signed_tx));
+        insta::assert_snapshot!("withdraw_basic", const_hex::encode(signed_tx));
 
         let generator = SafePayloadGenerator::new(
             &chain_key_alice,
@@ -823,7 +845,7 @@ pub(crate) mod tests {
             .sign_and_encode_to_eip2718(2, 1, None, &chain_key_bob)
             .await?;
 
-        insta::assert_snapshot!("withdraw_safe", hex::encode(signed_tx));
+        insta::assert_snapshot!("withdraw_safe", const_hex::encode(signed_tx));
 
         Ok(())
     }

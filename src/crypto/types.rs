@@ -1,4 +1,3 @@
-use cipher::crypto_common::OutputSizeUser;
 use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     montgomery::MontgomeryPoint,
@@ -11,9 +10,12 @@ use k256::{
     elliptic_curve::{
         self,
         point::NonIdentity,
-        sec1::{FromEncodedPoint, ToEncodedPoint},
+        sec1::{FromSec1Point, Sec1Point, ToSec1Point},
     },
 };
+type EncodedPoint = Sec1Point<Secp256k1>;
+use crate::crypto_random::Randomizable;
+use crate::primitive::{errors::GeneralError::ParseError, prelude::*};
 use libp2p_identity::PeerId;
 use std::{
     cmp::Ordering,
@@ -25,9 +27,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::crypto_random::Randomizable;
-use crate::primitive::{errors::GeneralError::ParseError, prelude::*};
-
+use crate::crypto::crypto_traits::OutputSizeUser;
 use crate::crypto::{
     errors::{
         CryptoError::{self, CalculationError, InvalidInputValue},
@@ -37,15 +37,15 @@ use crate::crypto::{
 };
 
 pub(crate) fn affine_point_from_bytes(bytes: &[u8]) -> Result<AffinePoint> {
-    let ep = k256::EncodedPoint::from_bytes(bytes)
+    let ep = EncodedPoint::from_bytes(bytes)
         .map_err(|_| InvalidInputValue("affine_point_from_bytes"))?;
-    AffinePoint::from_encoded_point(&ep)
+    AffinePoint::from_sec1_point(&ep)
         .into_option()
         .ok_or(InvalidInputValue("affine_point_from_bytes"))
 }
 
 pub(crate) fn affine_point_to_address(ap: &AffinePoint) -> Address {
-    let serialized = ap.to_encoded_point(false);
+    let serialized = ap.to_sec1_point(false);
     let hash = Hash::create(&[&serialized.as_ref()[1..]]);
     Address::new(&hash.as_ref()[12..])
 }
@@ -58,13 +58,13 @@ pub struct Challenge(NonIdentity<AffinePoint>);
 
 impl Debug for Challenge {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.to_encoded_point(true))
+        write!(f, "{}", self.0.to_sec1_point(true))
     }
 }
 
 impl PartialEq for Challenge {
     fn eq(&self, other: &Self) -> bool {
-        self.0.eq(other.0.as_ref())
+        self.0.eq(&other.0)
     }
 }
 
@@ -768,7 +768,7 @@ impl PublicKey {
 
     /// Serializes the public key to a binary uncompressed form.
     pub fn to_uncompressed_bytes(&self) -> Box<[u8]> {
-        self.0.to_encoded_point(false).to_bytes()
+        self.0.to_sec1_point(false).to_bytes()
     }
 
     /// Serializes the public key to a binary uncompressed form and converts it to hexadecimal string representation.
@@ -873,7 +873,7 @@ impl BytesRepresentable for PublicKey {
 impl From<NonIdentity<AffinePoint>> for PublicKey {
     fn from(value: NonIdentity<AffinePoint>) -> Self {
         let mut compressed = [0u8; PublicKey::SIZE_COMPRESSED];
-        compressed.copy_from_slice(value.to_encoded_point(true).as_bytes());
+        compressed.copy_from_slice(value.to_sec1_point(true).as_bytes());
         Self(value, compressed, affine_point_to_address(&value))
     }
 }
