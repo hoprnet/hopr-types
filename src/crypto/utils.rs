@@ -62,12 +62,11 @@ pub fn x25519_scalar_from_bytes(
 
 /// Creates secp256k1 secret scalar from the given bytes.
 /// Note that this function allows zero scalars.
-#[allow(deprecated)]
 pub fn k256_scalar_from_bytes(bytes: &[u8]) -> crate::crypto::errors::Result<k256::Scalar> {
     if bytes.len() == k256::elliptic_curve::FieldBytesSize::<Secp256k1>::to_usize() {
-        Option::from(k256::Scalar::from_repr(*k256::FieldBytes::from_slice(
-            bytes,
-        )))
+        Option::from(k256::Scalar::from_repr(
+            k256::FieldBytes::try_from(bytes).map_err(|_| InvalidInputValue("bytes"))?,
+        ))
         .ok_or(InvalidInputValue("bytes"))
     } else {
         Err(InvalidInputValue("bytes"))
