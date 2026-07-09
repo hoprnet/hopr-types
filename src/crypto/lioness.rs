@@ -166,7 +166,6 @@ where
         );
         S::new(&left_prime, &self.iv1)
             .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
-        //.expect("slices have always equal sizes");
 
         // R' = H_K2(R)
         let r_prime = <H as KeyInit>::new(&self.k2)
@@ -225,7 +224,6 @@ where
         );
         S::new(&left_prime, &self.iv2)
             .apply_keystream_b2b(&r_cpy, &mut block.get_out()[Self::K..B::USIZE]);
-        //.expect("slices have always equal sizes");
 
         // R' = H(K2 || R)
         let r_prime = <H as KeyInit>::new(&self.k2)

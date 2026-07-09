@@ -1,5 +1,0 @@
----
-source: src/crypto/vrf.rs
-expression: "const_hex::encode(serialized)"
----
-02a4e1fa28e8a40348baf79b576a6e040b370b74893d355cd48fc382d5235ff065b4c37c47fdc77afd1b3abd257f1f5e965a5987e10fd3f3ff8d284ddd980da6516405a4157e80f752fb5ff4e9881485b8b2a7c80c7c44d81f76e356d357c1ce4a
