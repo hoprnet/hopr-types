@@ -9,6 +9,10 @@ const ECDSA_SIGNATURE_SIZE: usize = 64;
 
 type RawSignature = ([u8; ECDSA_SIGNATURE_SIZE], u8);
 
+fn batch_capacity_from_size_hint((lower, upper): (usize, Option<usize>)) -> usize {
+    upper.unwrap_or(lower)
+}
+
 /// Trait for ECDSA signature engines.
 pub trait EcdsaEngine {
     /// Sign the given `hash` with the private key from the `chain_keypair`.
@@ -287,13 +291,14 @@ impl OffchainSignature {
         entries: I,
     ) -> bool {
         let entries = entries.into_iter();
-        let (lower, _) = entries.size_hint();
+        let capacity = batch_capacity_from_size_hint(entries.size_hint());
 
         // Build all batch inputs in one pass. `owned_msgs` keeps the message bytes alive
-        // for the borrowed slices passed to dalek without an intermediate tuple Vec.
-        let mut owned_msgs: Vec<M> = Vec::with_capacity(lower);
-        let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(lower);
-        let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(lower);
+        // for the borrowed slices passed to dalek. Prefer the upper bound because
+        // `filter_map` keeps it from the source iterator while its lower bound is zero.
+        let mut owned_msgs: Vec<M> = Vec::with_capacity(capacity);
+        let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(capacity);
+        let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(capacity);
 
         for ((msg, sig), pk) in entries {
             owned_msgs.push(msg);
@@ -482,5 +487,15 @@ mod tests {
 
         assert!(OffchainSignature::verify_batch(tuples));
         Ok(())
+    }
+
+    #[test]
+    fn verify_batch_capacity_uses_filter_map_upper_bound() {
+        let entries = [Some(1), None, Some(2)]
+            .into_iter()
+            .filter_map(|entry| entry);
+
+        assert_eq!(3, batch_capacity_from_size_hint(entries.size_hint()));
+        assert_eq!(4, batch_capacity_from_size_hint((4, None)));
     }
 }

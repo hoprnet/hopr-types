@@ -219,6 +219,12 @@ mod tests {
     }
 
     #[test]
+    fn from_hex_rejects_invalid_hex_at_stack_buffer_boundary() {
+        let str = format!("0x{}", "g".repeat(HEX_DECODE_STACK_BUF_SIZE * 2));
+        assert!(TestBytes::<HEX_DECODE_STACK_BUF_SIZE>::from_hex(&str).is_err());
+    }
+
+    #[test]
     fn from_hex_rejects_mismatched_size() {
         let str = format!("0x{}", "ab".repeat(HEX_DECODE_STACK_BUF_SIZE / 2));
         assert!(TestBytes::<HEX_DECODE_STACK_BUF_SIZE>::from_hex(&str).is_err());
