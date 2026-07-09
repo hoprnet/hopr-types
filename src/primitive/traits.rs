@@ -163,3 +163,60 @@ impl SaturatingSub for std::time::SystemTime {
             .unwrap_or(std::time::Duration::ZERO)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    struct TestBytes<const N: usize>([u8; N]);
+
+    impl<const N: usize> AsRef<[u8]> for TestBytes<N> {
+        fn as_ref(&self) -> &[u8] {
+            &self.0
+        }
+    }
+
+    impl<const N: usize> TryFrom<&[u8]> for TestBytes<N> {
+        type Error = GeneralError;
+
+        fn try_from(value: &[u8]) -> Result<Self> {
+            Ok(Self(
+                value.try_into().map_err(|_| ParseError("TestBytes".into()))?,
+            ))
+        }
+    }
+
+    impl<const N: usize> BytesRepresentable for TestBytes<N> {
+        const SIZE: usize = N;
+    }
+
+    #[test]
+    fn from_hex_roundtrips_at_stack_buffer_boundary() -> anyhow::Result<()> {
+        let value = TestBytes([0xab; HEX_DECODE_STACK_BUF_SIZE]);
+        assert_eq!(value, TestBytes::from_hex(&value.to_hex())?);
+        Ok(())
+    }
+
+    #[test]
+    fn from_hex_roundtrips_beyond_stack_buffer() -> anyhow::Result<()> {
+        let value = TestBytes([0xcd; HEX_DECODE_STACK_BUF_SIZE + 72]);
+        assert_eq!(value, TestBytes::from_hex(&value.to_hex())?);
+
+        let unprefixed = value.to_hex().trim_start_matches("0x").to_string();
+        assert_eq!(value, TestBytes::from_hex(&unprefixed)?);
+        Ok(())
+    }
+
+    #[test]
+    fn from_hex_rejects_invalid_hex_beyond_stack_buffer() {
+        let str = format!("0x{}", "g".repeat((HEX_DECODE_STACK_BUF_SIZE + 72) * 2));
+        assert!(TestBytes::<{ HEX_DECODE_STACK_BUF_SIZE + 72 }>::from_hex(&str).is_err());
+    }
+
+    #[test]
+    fn from_hex_rejects_mismatched_size() {
+        let str = format!("0x{}", "ab".repeat(HEX_DECODE_STACK_BUF_SIZE / 2));
+        assert!(TestBytes::<HEX_DECODE_STACK_BUF_SIZE>::from_hex(&str).is_err());
+    }
+}
