@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "1.12.0"
+version = "2.0.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -31,8 +31,9 @@ all-types = [
 primitive = [
   "dep:bigdecimal",
   "dep:chrono",
-  "dep:float-cmp",
   "dep:const-hex",
+  "dep:float-cmp",
+  "dep:hybrid-array",
   "dep:lazy_static",
   "dep:primitive-types",
   "dep:regex",
@@ -55,6 +56,7 @@ crypto = [
   "dep:elliptic-curve",
   "dep:ed25519-dalek",
   "dep:hash2curve",
+  "dep:hybrid-array",
   "dep:k256",
   "dep:libp2p-identity",
   "dep:poly1305",
