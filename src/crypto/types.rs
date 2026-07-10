@@ -4,7 +4,7 @@ use curve25519_dalek::{
 };
 use digest::Digest;
 use elliptic_curve::NonZeroScalar;
-use generic_array::GenericArray;
+use hybrid_array::Array;
 use k256::{
     AffinePoint, Secp256k1,
     elliptic_curve::{
@@ -145,7 +145,6 @@ impl Challenge {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HalfKey(#[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE]);
 
-#[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
 impl Default for HalfKey {
     fn default() -> Self {
         let mut ret = Self([0u8; Self::SIZE]);
@@ -564,9 +563,9 @@ impl From<&OffchainPublicKey> for EdwardsPoint {
     }
 }
 
-impl<'a> From<&'a OffchainPublicKey> for &'a GenericArray<u8, typenum::U32> {
-    fn from(value: &'a OffchainPublicKey) -> &'a GenericArray<u8, typenum::U32> {
-        GenericArray::from_slice(&value.compressed.0)
+impl<'a> From<&'a OffchainPublicKey> for &'a Array<u8, typenum::U32> {
+    fn from(value: &'a OffchainPublicKey) -> &'a Array<u8, typenum::U32> {
+        Array::cast_from_core(&value.compressed.0)
     }
 }
 
@@ -902,9 +901,9 @@ impl From<&PublicKey> for k256::ProjectivePoint {
     }
 }
 
-impl<'a> From<&'a PublicKey> for &'a GenericArray<u8, typenum::U33> {
-    fn from(value: &'a PublicKey) -> &'a GenericArray<u8, typenum::U33> {
-        GenericArray::from_slice(&value.1)
+impl<'a> From<&'a PublicKey> for &'a Array<u8, typenum::U33> {
+    fn from(value: &'a PublicKey) -> &'a Array<u8, typenum::U33> {
+        Array::cast_from_core(&value.1)
     }
 }
 
@@ -926,7 +925,6 @@ impl Display for Response {
     }
 }
 
-#[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
 impl Response {
     /// Converts this response to the PoR challenge by turning the non-zero scalar
     /// represented by this response into a secp256k1 curve point (public key).

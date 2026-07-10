@@ -6,7 +6,6 @@ pub mod errors;
 /// the important representations of chain key and packet key.
 pub mod keypairs;
 /// Implementation of the Lioness PRP
-#[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
 pub mod lioness;
 /// Re-exports of low-level cryptographic primitives.
 pub mod primitives;
@@ -34,6 +33,10 @@ pub mod crypto_traits {
         Digest, FixedOutput, FixedOutputReset, HashMarker, Output, OutputSizeUser, Update,
     };
     pub use poly1305::universal_hash::UniversalHash;
+
+    pub use elliptic_curve;
+
+    pub use hash2curve;
 
     /// Pseudo-random permutation (PRP)
     pub trait PRP: BlockSizeUser {

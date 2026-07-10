@@ -18,8 +18,15 @@ pub use babyjubjub_ec::{
 pub use blake3::{Hasher as Blake3, OutputReader as Blake3Output, hash as blake3_hash};
 /// ChaCha20 stream cipher, re-exported from the [`chacha20`] crate.
 pub use chacha20::ChaCha20;
+/// Curve25519 elliptic curve, re-exported from the [`curve25519_dalek`] crate.
+pub use curve25519_dalek::{
+    edwards::CompressedEdwardsY as Curve25519CompressedPoint,
+    edwards::EdwardsPoint as Curve25519Point,
+    montgomery::MontgomeryPoint as Curve25519MontgomeryPoint, scalar::Scalar as Curve25519Scalar,
+    traits::IsIdentity,
+};
 /// Secp256k1 elliptic curve, re-exported from the [`k256`] crate.
-pub use k256::{CompressedPoint as K256CompressedPoint, Scalar as K256Scalar, Secp256k1};
+pub use k256::Secp256k1;
 /// Poly1305 one-time authenticator, re-exported from the [`poly1305`] crate.
 pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
@@ -84,7 +91,6 @@ impl<T: KeyIvInit> std::fmt::Debug for IvKey<T> {
     }
 }
 
-#[allow(deprecated)] // Until the dependency updates to newer versions of `generic-array`
 impl<T: KeyIvInit> IvKey<T> {
     /// Total size of the key and IV in bytes.
     pub const SIZE: usize = T::KeySize::USIZE + T::IvSize::USIZE;
@@ -92,7 +98,9 @@ impl<T: KeyIvInit> IvKey<T> {
     /// Returns the IV part.
     #[inline]
     pub fn iv(&self) -> &Iv<T> {
-        Iv::<T>::from_slice(&self.0[0..T::IvSize::USIZE])
+        (&self.0[0..T::IvSize::USIZE])
+            .try_into()
+            .expect("iv is always the correct length")
     }
 
     /// Returns IV as a mutable slice.
@@ -104,7 +112,9 @@ impl<T: KeyIvInit> IvKey<T> {
     /// Returns the key part.
     #[inline]
     pub fn key(&self) -> &Key<T> {
-        Key::<T>::from_slice(&self.0[T::IvSize::USIZE..])
+        (&self.0[T::IvSize::USIZE..])
+            .try_into()
+            .expect("key is always the correct length")
     }
 
     /// Returns the key as a mutable slice.
