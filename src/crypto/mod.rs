@@ -36,6 +36,8 @@ pub mod crypto_traits {
 
     pub use elliptic_curve;
 
+    pub use hash2curve;
+
     /// Pseudo-random permutation (PRP)
     pub trait PRP: BlockSizeUser {
         /// Forward permutation
