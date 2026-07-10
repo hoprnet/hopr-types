@@ -16,6 +16,9 @@ pub mod traits;
 /// Re-exports of the `typenum` crate.
 pub use typenum;
 
+/// Re-exports of the `hybrid_array` crate.
+pub use hybrid_array;
+
 /// Approximately compares two double-precision floats.
 ///
 /// This function first tests if the two values relatively differ by at least `epsilon`.
