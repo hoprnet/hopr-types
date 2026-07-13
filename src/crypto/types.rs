@@ -824,11 +824,14 @@ impl TryFrom<&[u8]> for PublicKey {
                 Ok(key.to_nonidentity().into())
             }
             Self::SIZE_UNCOMPRESSED_PLAIN => {
-                // add 0x04 prefix
-                let key = elliptic_curve::PublicKey::<Secp256k1>::from_sec1_bytes(
-                    &[&[4u8], value].concat(),
-                )
-                .map_err(|_| GeneralError::ParseError("invalid secp256k1 point".into()))?;
+                // Add the SEC1 uncompressed prefix in a stack buffer; `from_sec1_bytes`
+                // requires the prefixed form, and concat would allocate for every parse.
+                let mut buf = [0u8; Self::SIZE_UNCOMPRESSED];
+                buf[0] = 4;
+                buf[1..].copy_from_slice(value);
+
+                let key = elliptic_curve::PublicKey::<Secp256k1>::from_sec1_bytes(&buf)
+                    .map_err(|_| GeneralError::ParseError("invalid secp256k1 point".into()))?;
 
                 Ok(key.to_nonidentity().into())
             }

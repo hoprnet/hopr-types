@@ -81,6 +81,10 @@ pub trait BytesRepresentable<E = GeneralError>:
     }
 }
 
+/// Stack buffer size used by [`ToHex::from_hex`]'s fast decode path. Sized comfortably above the
+/// largest known `BytesRepresentable::SIZE` in this crate (96 bytes, for `Acknowledgement`).
+const HEX_DECODE_STACK_BUF_SIZE: usize = 128;
+
 impl<T: BytesRepresentable> ToHex for T {
     fn to_hex(&self) -> String {
         format!("0x{}", const_hex::encode(self.as_ref()))
@@ -92,6 +96,16 @@ impl<T: BytesRepresentable> ToHex for T {
                 .strip_prefix("0x")
                 .or_else(|| str.strip_prefix("0X"))
                 .unwrap_or(str);
+
+            let half_len = data.len() / 2;
+            // `half_len` is the decoded byte length; common fixed-size values fit in the
+            // stack buffer, while larger inputs use the heap fallback below.
+            if half_len <= HEX_DECODE_STACK_BUF_SIZE {
+                let mut buf = [0u8; HEX_DECODE_STACK_BUF_SIZE];
+                const_hex::decode_to_slice(data, &mut buf[..half_len])
+                    .map_err(|e| ParseError(e.to_string()))?;
+                return T::try_from(&buf[..half_len]);
+            }
 
             const_hex::decode(data)
                 .map_err(|e| ParseError(e.to_string()))
@@ -149,5 +163,70 @@ impl SaturatingSub for std::time::SystemTime {
     fn saturating_sub(&self, earlier: std::time::SystemTime) -> std::time::Duration {
         self.duration_since(earlier)
             .unwrap_or(std::time::Duration::ZERO)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    struct TestBytes<const N: usize>([u8; N]);
+
+    impl<const N: usize> AsRef<[u8]> for TestBytes<N> {
+        fn as_ref(&self) -> &[u8] {
+            &self.0
+        }
+    }
+
+    impl<const N: usize> TryFrom<&[u8]> for TestBytes<N> {
+        type Error = GeneralError;
+
+        fn try_from(value: &[u8]) -> Result<Self> {
+            Ok(Self(
+                value
+                    .try_into()
+                    .map_err(|_| ParseError("TestBytes".into()))?,
+            ))
+        }
+    }
+
+    impl<const N: usize> BytesRepresentable for TestBytes<N> {
+        const SIZE: usize = N;
+    }
+
+    #[test]
+    fn from_hex_roundtrips_at_stack_buffer_boundary() -> anyhow::Result<()> {
+        let value = TestBytes([0xab; HEX_DECODE_STACK_BUF_SIZE]);
+        assert_eq!(value, TestBytes::from_hex(&value.to_hex())?);
+        Ok(())
+    }
+
+    #[test]
+    fn from_hex_roundtrips_beyond_stack_buffer() -> anyhow::Result<()> {
+        let value = TestBytes([0xcd; HEX_DECODE_STACK_BUF_SIZE + 72]);
+        assert_eq!(value, TestBytes::from_hex(&value.to_hex())?);
+
+        let unprefixed = value.to_hex().trim_start_matches("0x").to_string();
+        assert_eq!(value, TestBytes::from_hex(&unprefixed)?);
+        Ok(())
+    }
+
+    #[test]
+    fn from_hex_rejects_invalid_hex_beyond_stack_buffer() {
+        let str = format!("0x{}", "g".repeat((HEX_DECODE_STACK_BUF_SIZE + 72) * 2));
+        assert!(TestBytes::<{ HEX_DECODE_STACK_BUF_SIZE + 72 }>::from_hex(&str).is_err());
+    }
+
+    #[test]
+    fn from_hex_rejects_invalid_hex_at_stack_buffer_boundary() {
+        let str = format!("0x{}", "g".repeat(HEX_DECODE_STACK_BUF_SIZE * 2));
+        assert!(TestBytes::<HEX_DECODE_STACK_BUF_SIZE>::from_hex(&str).is_err());
+    }
+
+    #[test]
+    fn from_hex_rejects_mismatched_size() {
+        let str = format!("0x{}", "ab".repeat(HEX_DECODE_STACK_BUF_SIZE / 2));
+        assert!(TestBytes::<HEX_DECODE_STACK_BUF_SIZE>::from_hex(&str).is_err());
     }
 }

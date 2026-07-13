@@ -9,6 +9,10 @@ const ECDSA_SIGNATURE_SIZE: usize = 64;
 
 type RawSignature = ([u8; ECDSA_SIGNATURE_SIZE], u8);
 
+fn batch_capacity_from_size_hint((lower, upper): (usize, Option<usize>)) -> usize {
+    upper.unwrap_or(lower)
+}
+
 /// Trait for ECDSA signature engines.
 pub trait EcdsaEngine {
     /// Sign the given `hash` with the private key from the `chain_keypair`.
@@ -284,18 +288,23 @@ impl OffchainSignature {
     >(
         entries: I,
     ) -> bool {
-        let (signed_msgs, pub_keys): (
-            Vec<(M, OffchainSignature)>,
-            Vec<ed25519_dalek::VerifyingKey>,
-        ) = entries
-            .into_iter()
-            .map(|(a, b)| (a, ed25519_dalek::VerifyingKey::from(b.edwards)))
-            .unzip();
+        let entries = entries.into_iter();
+        let capacity = batch_capacity_from_size_hint(entries.size_hint());
 
-        let (msgs, signatures): (Vec<&[u8]>, Vec<ed25519_dalek::Signature>) = signed_msgs
-            .iter()
-            .map(|(a, b)| (a.as_ref(), ed25519_dalek::Signature::from_bytes(&b.0)))
-            .unzip();
+        // Build all batch inputs in one pass. `owned_msgs` keeps the message bytes alive
+        // for the borrowed slices passed to dalek. Prefer the upper bound because
+        // `filter_map` keeps it from the source iterator while its lower bound is zero.
+        let mut owned_msgs: Vec<M> = Vec::with_capacity(capacity);
+        let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(capacity);
+        let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(capacity);
+
+        for ((msg, sig), pk) in entries {
+            owned_msgs.push(msg);
+            signatures.push(ed25519_dalek::Signature::from_bytes(&sig.0));
+            pub_keys.push(ed25519_dalek::VerifyingKey::from(pk.edwards));
+        }
+
+        let msgs: Vec<&[u8]> = owned_msgs.iter().map(AsRef::as_ref).collect();
 
         ed25519_dalek::verify_batch(&msgs, &signatures, &pub_keys).is_ok()
     }
@@ -476,5 +485,15 @@ mod tests {
 
         assert!(OffchainSignature::verify_batch(tuples));
         Ok(())
+    }
+
+    #[test]
+    fn verify_batch_capacity_uses_filter_map_upper_bound() {
+        let entries = [Some(1), None, Some(2)]
+            .into_iter()
+            .filter_map(|entry| entry);
+
+        assert_eq!(3, batch_capacity_from_size_hint(entries.size_hint()));
+        assert_eq!(4, batch_capacity_from_size_hint((4, None)));
     }
 }
