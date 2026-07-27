@@ -65,10 +65,10 @@ mod selectors {
     pub const FINALIZE_OUTGOING_CHANNEL_CLOSURE: [u8; 4] = hex!("23cb3ac0");
     /// `finalizeOutgoingChannelClosureSafe(address,address)`
     pub const FINALIZE_OUTGOING_CHANNEL_CLOSURE_SAFE: [u8; 4] = hex!("651514bf");
-    /// `redeemTicket(((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
-    pub const REDEEM_TICKET: [u8; 4] = hex!("65e3fa72");
-    /// `redeemTicketSafe(address,((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
-    pub const REDEEM_TICKET_SAFE: [u8; 4] = hex!("2d50b18b");
+    /// `redeemTicket(((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
+    pub const REDEEM_TICKET: [u8; 4] = hex!("eb13eb11");
+    /// `redeemTicketSafe(address,((bytes32,uint96,uint48,uint24,uint56),(bytes32,bytes32),uint256),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))`
+    pub const REDEEM_TICKET_SAFE: [u8; 4] = hex!("ab9b6ba7");
 }
 
 // ─── ABI encoding helpers ──────────────────────────────────────────────────
@@ -284,12 +284,12 @@ fn redeemable_ticket_words(acked_ticket: &RedeemableTicket) -> payload::Result<[
     ])
 }
 
-/// Packs the 8 × 32-byte words of the Solidity `VRFParameters` struct: the `V`, `s*B`, and
-/// `h*V` curve points (2 words each, X then Y) plus the `s` and `h` scalars.
+/// Packs the 14 × 32-byte words of the Solidity `VRFParameters` struct: the `V`, `s*B`,
+/// `h*V`, `A`, `s*G`, and `h*A` curve points (2 words each) plus the `s` and `h` scalars.
 fn vrf_parameters_words(
     acked_ticket: &RedeemableTicket,
     me: &Address,
-) -> payload::Result<[[u8; 32]; 8]> {
+) -> payload::Result<[[u8; 32]; 14]> {
     let vp = &acked_ticket.vrf_params;
 
     let (vx, vy) = point_xy_words(vp.get_v_encoded_point().as_bytes());
@@ -306,19 +306,27 @@ fn vrf_parameters_words(
 
     let (hvx, hvy) = point_xy_words(vp.get_h_v_witness().as_bytes());
 
+    let (ax, ay) = point_xy_words(vp.get_a_encoded_point().as_bytes());
+
+    let (sgx, sgy) = point_xy_words(vp.get_s_g_witness().as_bytes());
+
+    let (hax, hay) = point_xy_words(vp.get_h_a_witness().as_bytes());
+
     let s_w = right_align32(vp.s.to_bytes().as_ref());
     let h_w = right_align32(vp.h.to_bytes().as_ref());
 
-    Ok([vx, vy, s_w, h_w, sbx, sby, hvx, hvy])
+    Ok([
+        vx, vy, s_w, h_w, sbx, sby, hvx, hvy, ax, ay, sgx, sgy, hax, hay,
+    ])
 }
 
-/// Packs the 16 × 32-byte words that make up `(RedeemableTicket, VRFParameters)`.
+/// Packs the 22 × 32-byte words that make up `(RedeemableTicket, VRFParameters)`.
 /// All fields are static (no dynamic types inside these structs).
 fn redeem_ticket_words(
     acked_ticket: &RedeemableTicket,
     me: &Address,
-) -> payload::Result<[[u8; 32]; 16]> {
-    let mut words = [[0u8; 32]; 16];
+) -> payload::Result<[[u8; 32]; 22]> {
+    let mut words = [[0u8; 32]; 22];
     words[..8].copy_from_slice(&redeemable_ticket_words(acked_ticket)?);
     words[8..].copy_from_slice(&vrf_parameters_words(acked_ticket, me)?);
     Ok(words)
@@ -335,7 +343,7 @@ fn encode_redeem_ticket_safe(
     me: &Address,
 ) -> payload::Result<Vec<u8>> {
     let words = redeem_ticket_words(acked_ticket, me)?;
-    let mut all = [[0u8; 32]; 17];
+    let mut all = [[0u8; 32]; 23];
     all[0] = addr32(self_addr);
     all[1..].copy_from_slice(&words);
     Ok(static_call(selectors::REDEEM_TICKET_SAFE, &all))
