@@ -4,13 +4,20 @@ use const_hex::traits::{FromHex, ToHexExt};
 use serde::{Deserialize, Serialize, de::Deserializer, ser::Serializer};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct PrivateKeys {
     pub version: u32,
     #[serde(serialize_with = "buffer_to_hex", deserialize_with = "hex_to_buffer")]
     pub chain_key: Vec<u8>,
     #[serde(serialize_with = "buffer_to_hex", deserialize_with = "hex_to_buffer")]
     pub packet_key: Vec<u8>,
+    #[serde(
+        serialize_with = "buffer_to_hex",
+        deserialize_with = "hex_to_buffer",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub babyjubjub_key: Vec<u8>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
