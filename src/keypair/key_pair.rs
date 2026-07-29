@@ -71,6 +71,12 @@ pub struct HoprKeys {
     id: Uuid,
 }
 
+impl<'a> From<&'a HoprKeys> for (&'a ChainKeypair, &'a OffchainKeypair) {
+    fn from(keys: &'a HoprKeys) -> Self {
+        (&keys.chain_key, &keys.packet_key)
+    }
+}
+
 impl<'a> From<&'a HoprKeys> for (&'a ChainKeypair, &'a OffchainKeypair, &'a BjjKeypair) {
     fn from(keys: &'a HoprKeys) -> Self {
         (&keys.chain_key, &keys.packet_key, &keys.bjj_key)
