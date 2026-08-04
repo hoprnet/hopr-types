@@ -161,7 +161,8 @@ k256 = { version = "0.14.0", optional = true, features = [
   "group-digest",
 ] }
 lazy_static = { version = "1.5.0", optional = true }
-libp2p-identity = { version = "0.3.0", optional = true, features = [
+# do not update libp2p-identity until new libp2p version
+libp2p-identity = { version = "0.2.14", optional = true, features = [
   "peerid",
   "ed25519",
   "rand",
