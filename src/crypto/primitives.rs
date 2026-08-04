@@ -10,6 +10,8 @@ use crate::crypto::{
 /// AES with 128-bit key in counter-mode (with big-endian counter).
 pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
+use crate::crypto::prelude::BjjPublicKey;
+use crate::primitive::prelude::{Address, GeneralError};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
 pub use babyjubjub_ec::{
     BabyJubJub, GroupRepr as BabyJubJubCompressedPoint, Scalar as BabyJubJubScalar,
@@ -31,6 +33,7 @@ pub use k256::Secp256k1;
 pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
 pub use sha3::{Keccak256, Sha3_256};
+use strum::IntoDiscriminant;
 
 /// Represents a 256-bit secret key of fixed length.
 /// The value is auto-zeroized on drop.
@@ -132,3 +135,95 @@ impl<T: KeyIvInit> IvKey<T> {
         V::new(self.key(), self.iv())
     }
 }
+
+/// An address representing a PIX deposit.
+///
+/// ```rust
+/// use hopr_types::primitive::prelude::Address;
+/// use hopr_types::crypto::types::BjjPublicKey;
+/// use hopr_types::crypto::keypairs::{Keypair, BjjKeypair, ChainKeypair};
+/// use hopr_types::crypto::prelude::{PixDepositAddress, PixDepositAddressDiscriminants};
+///
+/// let pub_key_1 = *BjjKeypair::random().public();
+/// let pub_key_2: PixDepositAddress = pub_key_1.into();
+///
+/// assert_eq!(PixDepositAddressDiscriminants::Bjj, pub_key_2.address_type());
+/// assert_eq!(pub_key_1, pub_key_2.try_into().unwrap());
+///
+/// let pub_key_1 = ChainKeypair::random().public().to_address();
+/// let pub_key_2: PixDepositAddress = pub_key_1.into();
+///
+/// assert_eq!(PixDepositAddressDiscriminants::Eth, pub_key_2.address_type());
+/// assert_eq!(pub_key_1, pub_key_2.try_into().unwrap());
+/// ```
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash, strum::EnumDiscriminants)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[strum_discriminants(vis(pub))]
+#[strum_discriminants(derive(strum::FromRepr, strum::EnumCount), repr(u8))]
+#[cfg_attr(
+    feature = "serde",
+    strum_discriminants(derive(serde::Serialize, serde::Deserialize))
+)]
+pub enum PixDepositAddress {
+    /// [`Address`]-based PIX deposit address.
+    Eth(Address),
+    /// [`BjjPublicKey`]-based PIX deposit address.
+    Bjj(BjjPublicKey),
+}
+
+impl PixDepositAddress {
+    /// Returns the address type of this deposit address.
+    #[inline]
+    pub fn address_type(&self) -> PixDepositAddressDiscriminants {
+        self.discriminant()
+    }
+}
+
+impl AsRef<[u8]> for PixDepositAddress {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            PixDepositAddress::Eth(key) => key.as_ref(),
+            PixDepositAddress::Bjj(key) => key.as_ref(),
+        }
+    }
+}
+
+impl From<Address> for PixDepositAddress {
+    fn from(value: Address) -> Self {
+        Self::Eth(value)
+    }
+}
+
+impl TryFrom<PixDepositAddress> for Address {
+    type Error = GeneralError;
+
+    fn try_from(value: PixDepositAddress) -> Result<Self, Self::Error> {
+        match value {
+            PixDepositAddress::Eth(a) => Ok(a),
+            PixDepositAddress::Bjj(_) => Err(GeneralError::InvalidInput),
+        }
+    }
+}
+
+impl From<BjjPublicKey> for PixDepositAddress {
+    fn from(value: BjjPublicKey) -> Self {
+        Self::Bjj(value)
+    }
+}
+
+impl TryFrom<PixDepositAddress> for BjjPublicKey {
+    type Error = GeneralError;
+
+    fn try_from(value: PixDepositAddress) -> Result<Self, Self::Error> {
+        match value {
+            PixDepositAddress::Bjj(a) => Ok(a),
+            PixDepositAddress::Eth(_) => Err(GeneralError::InvalidInput),
+        }
+    }
+}
+
+/// A secret corresponding to a PIX deposit address.
+///
+/// Usually the [`PixDepositAddress`] can be calculated from the secret.
+#[derive(Clone, Debug)]
+pub struct PixDepositSecret(pub SecretValue<typenum::U32>);

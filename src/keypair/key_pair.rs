@@ -116,6 +116,7 @@ impl FromStr for HoprKeys {
     /// use std::str::FromStr;
     /// use hopr_types::keypair::key_pair::HoprKeys;
     /// use hopr_types::crypto_random::Randomizable;
+    /// use hopr_types::crypto::keypairs::Keypair;
     ///
     /// let keys = HoprKeys::random();
     /// let hex = format!("0x{}", const_hex::encode(&[

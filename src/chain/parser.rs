@@ -303,7 +303,6 @@ mod tests {
         prelude::{ChainKeypair, HalfKey, Hash, Keypair, OffchainKeypair, Response},
     };
     use crate::internal::prelude::{AnnouncementData, KeyBinding, TicketBuilder};
-    use hex_literal::hex;
 
     use super::*;
     use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2};
