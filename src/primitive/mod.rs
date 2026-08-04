@@ -7,8 +7,8 @@ pub mod balance;
 pub mod bounded;
 /// Lists all errors in this crate.
 pub mod errors;
-/// Implements the most primitive types, such as [U256](crate::primitive::primitives::U256) or
-/// [Address](crate::primitive::primitives::Address).
+/// Implements the most primitive types, such as [U256](primitives::U256) or
+/// [Address](primitives::Address).
 pub mod primitives;
 /// Defines commonly used traits across the entire code base.
 pub mod traits;
@@ -18,6 +18,9 @@ pub use typenum;
 
 /// Re-exports of the `hybrid_array` crate.
 pub use hybrid_array;
+
+/// Re-exports of the `multiaddr` crate.
+pub use multiaddr;
 
 /// Approximately compares two double-precision floats.
 ///
