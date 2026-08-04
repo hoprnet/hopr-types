@@ -167,30 +167,45 @@ pub(crate) mod tests {
 
     lazy_static::lazy_static! {
         pub static ref REDEEMABLE_TICKET: RedeemableTicket = postcard::from_bytes(&hex!(
-            "bea83ba0fcee21da44a30c893f466e6bf0c29bbb0530783365387bffffffffffffff010000000000000000000000000000000000000000014038536c412ff92c3b070d98724a2ac167b7a914aa2151cf71eea3d192b0df195d0184aa92c73bccb27aded5f27fcd1cdcf65889f78cf2e62d2f630f659aa2fba220cba79e6dc2ea1205cb76833c9223cd912f056f3406d73d0d689602afe5e88abc668430def9eacd2b5064acf85d73fb0b351a1c8c20d7f3fa28f0caa757e81226e1ee86a9efdbe7991442286183797296ebaa4d292a2029632298ff35f20e262dd8255199fbe3bf06e2ee7ace1382292ce2c101e378cc2103d14016cbfa555574e8a5a8fbcb52677dfb7e9267e99c05ebe29603e41b3332772077ae550592cd69abb802dcfaafe62f2ebc89f94825ec489b19c0571cf87f1c4520f1e3c5dd285f6199709b05753f98025199716c59eaa49bfd71c24f9b64ffe0d2200000000000000000000000000000000000000000000000000000000000000000"
+            "bea83ba0fcee21da44a30c893f466e6bf0c29bbb0530783365387bffffffffffffff010000000000000000000000000000000000000000014038536c412ff92c3b070d98724a2ac167b7a914aa2151cf71eea3d192b0df195d0184aa92c73bccb27aded5f27fcd1cdcf65889f78cf2e62d2f630f659aa2fba220cba79e6dc2ea1205cb76833c9223cd912f056f3406d73d0d689602afe5e88abc668430def9eacd2b5064acf85d73fb0b351a1c8c20d7f3fa28f0caa757e81226e1ee86a9efdbe7991442286183797296ebaa4d292a2041193a6de59f8f7de35797ed17d90a00f6afefba2daa6391118b76bf99f380e62103d14016cbfa555574e8a5a8fbcb52677dfb7e9267e99c05ebe29603e41b333277208547f752c72aba2a752727be93d7e2f7422230b4e2a9fbd4820318606aff5c9420d12923be051c0212d448103c3d5b5b4196c8d5d369f70fe923f58a7c2cf41100210239d1bc2291826eaed86567d225cf243ebc637275e0a5aedb0d6b1dc82136a38e200000000000000000000000000000000000000000000000000000000000000000"
         )).unwrap();
+    }
 
-        // Use this to generate the REDEEMABLE_TICKET variable above
-        // #[test]
-        // fn gen_ticket() -> anyhow::Result<()> {
-        // use crate::crypto::crypto_traits::Randomizable;
-        //
-        // let hk1 = HalfKey::random();
-        // let hk2 = HalfKey::random();
-        //
-        // let ticket = TicketBuilder::default()
-        // .counterparty(&ChainKeypair::from_secret(&PRIVATE_KEY_2)?)
-        // .amount(1000)
-        // .index(123)
-        // .channel_epoch(1)
-        // .eth_challenge(EthereumChallenge::default())
-        // .build_signed(&ChainKeypair::from_secret(&PRIVATE_KEY_1)?, &Default::default())?
-        // .into_acknowledged(Response::from_half_keys(&hk1, &hk2)?)
-        // .into_redeemable(&&ChainKeypair::from_secret(&PRIVATE_KEY_2)?, &Default::default())?;
-        //
-        // assert_eq!("", const_hex::encode(postcard::to_allocvec(&ticket)?));
-        // Ok(())
-        // }
+    // Use this to generate the REDEEMABLE_TICKET variable above.
+    // Run with: cargo test -F all-types gen_ticket -- --nocapture --ignored
+    // then copy the hex output into the REDEEMABLE_TICKET lazy_static above.
+    //
+    // NOTE: deliberately outside the lazy_static! block (test fns cannot
+    // live inside macro invocations).
+    #[test]
+    #[ignore]
+    fn gen_ticket() -> anyhow::Result<()> {
+        use crate::crypto::crypto_traits::Randomizable;
+        use crate::crypto::prelude::*;
+        use crate::internal::prelude::*;
+        use crate::primitive::prelude::*;
+
+        let hk1 = HalfKey::random();
+        let hk2 = HalfKey::random();
+
+        let ticket = TicketBuilder::default()
+            .counterparty(&ChainKeypair::from_secret(&PRIVATE_KEY_2)?)
+            .amount(1000)
+            .index(123)
+            .channel_epoch(1)
+            .eth_challenge(EthereumChallenge::default())
+            .build_signed(
+                &ChainKeypair::from_secret(&PRIVATE_KEY_1)?,
+                &Default::default(),
+            )?
+            .into_acknowledged(Response::from_half_keys(&hk1, &hk2)?)
+            .into_redeemable(
+                &&ChainKeypair::from_secret(&PRIVATE_KEY_2)?,
+                &Default::default(),
+            )?;
+
+        println!("{}", const_hex::encode(postcard::to_allocvec(&ticket)?));
+        Ok(())
     }
 
     pub const PRIVATE_KEY_1: [u8; 32] =

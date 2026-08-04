@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "2.0.1"
+version = "2.1.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -153,7 +153,7 @@ const-hex = { version = "1.19.1", optional = true, default-features = false, fea
 ] }
 hash2curve = { version = "0.14.0", optional = true }
 hex-literal = { version = "1.1.0", optional = true }
-hopr-bindings = { version = "4.9.1", optional = true }
+hopr-bindings = { version = "4.12.0", optional = true }
 k256 = { version = "0.14.0", optional = true, features = [
   "arithmetic",
   "ecdh",

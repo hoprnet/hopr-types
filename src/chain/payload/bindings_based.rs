@@ -660,6 +660,9 @@ fn convert_vrf_parameters(
         .expect("ticket hash exceeded hash2field boundaries or encoding to unsupported curve");
 
     let h_v = off_chain.get_h_v_witness();
+    let a = off_chain.get_a_encoded_point();
+    let s_g = off_chain.get_s_g_witness();
+    let h_a = off_chain.get_h_a_witness();
 
     VRFParameters {
         vx: U256::from_be_slice(&v.as_bytes()[1..33]),
@@ -670,6 +673,12 @@ fn convert_vrf_parameters(
         sBy: U256::from_be_slice(&s_b.as_bytes()[33..65]),
         hVx: U256::from_be_slice(&h_v.as_bytes()[1..33]),
         hVy: U256::from_be_slice(&h_v.as_bytes()[33..65]),
+        ax: U256::from_be_slice(&a.as_bytes()[1..33]),
+        ay: U256::from_be_slice(&a.as_bytes()[33..65]),
+        sGx: U256::from_be_slice(&s_g.as_bytes()[1..33]),
+        sGy: U256::from_be_slice(&s_g.as_bytes()[33..65]),
+        hAx: U256::from_be_slice(&h_a.as_bytes()[1..33]),
+        hAy: U256::from_be_slice(&h_a.as_bytes()[33..65]),
     }
 }
 

@@ -28,11 +28,11 @@ const HOPR_KDF_PARAMS_P: u32 = 1;
 
 const PACKET_KEY_LENGTH: usize = <OffchainKeypair as Keypair>::SecretLen::USIZE;
 const CHAIN_KEY_LENGTH: usize = <ChainKeypair as Keypair>::SecretLen::USIZE;
+const BJJ_KEY_LENGTH: usize = <BjjKeypair as Keypair>::SecretLen::USIZE;
 
 const V1_PRIVKEY_LENGTH: usize = 32;
-const V2_PRIVKEYS_LENGTH: usize = 172;
 
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 
 pub enum IdentityRetrievalModes<'a> {
     /// Node starts with a previously generated identity file.
@@ -67,12 +67,19 @@ pub enum IdentityRetrievalModes<'a> {
 pub struct HoprKeys {
     pub packet_key: OffchainKeypair,
     pub chain_key: ChainKeypair,
+    pub bjj_key: BjjKeypair,
     id: Uuid,
 }
 
 impl<'a> From<&'a HoprKeys> for (&'a ChainKeypair, &'a OffchainKeypair) {
     fn from(keys: &'a HoprKeys) -> Self {
         (&keys.chain_key, &keys.packet_key)
+    }
+}
+
+impl<'a> From<&'a HoprKeys> for (&'a ChainKeypair, &'a OffchainKeypair, &'a BjjKeypair) {
+    fn from(keys: &'a HoprKeys) -> Self {
+        (&keys.chain_key, &keys.packet_key, &keys.bjj_key)
     }
 }
 
@@ -88,10 +95,11 @@ impl std::fmt::Display for HoprKeys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             format!(
-                "packet_key: {}, chain_key: {} (Ethereum address: {})\nUUID: {}",
+                "packet_key: {}, chain_key: {} (Ethereum address: {})\nbjj_key: {}\nUUID: {}",
                 self.packet_key.public().to_peerid_str(),
                 self.chain_key.public().to_hex(),
                 self.chain_key.public().to_address(),
+                self.bjj_key.public(),
                 self.id
             )
             .as_str(),
@@ -107,21 +115,27 @@ impl FromStr for HoprKeys {
     /// ```rust
     /// use std::str::FromStr;
     /// use hopr_types::keypair::key_pair::HoprKeys;
+    /// use hopr_types::crypto_random::Randomizable;
     ///
-    /// let priv_keys = "0x56b29cefcdf576eea306ba2fd5f32e651c09e0abbc018c47bdc6ef44f6b7506f1050f95137770478f50b456267f761f1b8b341a13da68bc32e5c96984fcd52ae";
-    /// assert!(HoprKeys::from_str(priv_keys).is_ok());
+    /// let keys = HoprKeys::random();
+    /// let hex = format!("0x{}", const_hex::encode(&[
+    ///     keys.packet_key.secret().as_ref(),
+    ///     keys.chain_key.secret().as_ref(),
+    ///     keys.bjj_key.secret().as_ref(),
+    /// ].concat()));
+    /// assert!(HoprKeys::from_str(&hex).is_ok());
     /// ```
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let maybe_priv_key = s.strip_prefix("0x").unwrap_or(s);
 
-        if maybe_priv_key.len() != 2 * (PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH) {
+        if maybe_priv_key.len() != 2 * (PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH) {
             return Err(KeyPairError::InvalidPrivateKeySize {
                 actual: maybe_priv_key.len(),
-                expected: 2 * (PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH),
+                expected: 2 * (PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH),
             });
         }
 
-        let mut priv_key_raw = [0u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH];
+        let mut priv_key_raw = [0u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH];
         const_hex::decode_to_slice(maybe_priv_key, &mut priv_key_raw[..])
             .map_err(|e| KeyPairError::HexParsingError(e.to_string()))?;
 
@@ -129,30 +143,43 @@ impl FromStr for HoprKeys {
     }
 }
 
-impl TryFrom<[u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH]> for HoprKeys {
+impl TryFrom<[u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH]> for HoprKeys {
     type Error = KeyPairError;
 
     fn try_from(
-        value: [u8; CHAIN_KEY_LENGTH + PACKET_KEY_LENGTH],
+        value: [u8; CHAIN_KEY_LENGTH + PACKET_KEY_LENGTH + BJJ_KEY_LENGTH],
     ) -> std::result::Result<Self, Self::Error> {
         let mut packet_key = [0u8; PACKET_KEY_LENGTH];
         packet_key.copy_from_slice(&value[0..32]);
         let mut chain_key = [0u8; CHAIN_KEY_LENGTH];
         chain_key.copy_from_slice(&value[32..64]);
+        let mut bjj_key = [0u8; BJJ_KEY_LENGTH];
+        bjj_key.copy_from_slice(&value[64..96]);
 
-        (packet_key, chain_key).try_into()
+        (packet_key, chain_key, bjj_key).try_into()
     }
 }
 
-impl TryFrom<([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH])> for HoprKeys {
+impl
+    TryFrom<(
+        [u8; PACKET_KEY_LENGTH],
+        [u8; CHAIN_KEY_LENGTH],
+        [u8; BJJ_KEY_LENGTH],
+    )> for HoprKeys
+{
     type Error = KeyPairError;
 
     fn try_from(
-        value: ([u8; PACKET_KEY_LENGTH], [u8; CHAIN_KEY_LENGTH]),
+        value: (
+            [u8; PACKET_KEY_LENGTH],
+            [u8; CHAIN_KEY_LENGTH],
+            [u8; BJJ_KEY_LENGTH],
+        ),
     ) -> std::result::Result<Self, Self::Error> {
         Ok(HoprKeys {
             packet_key: OffchainKeypair::from_secret(&value.0)?,
             chain_key: ChainKeypair::from_secret(&value.1)?,
+            bjj_key: BjjKeypair::from_secret(&value.2)?,
             id: Uuid::new_v4(),
         })
     }
@@ -162,6 +189,7 @@ impl PartialEq for HoprKeys {
     fn eq(&self, other: &Self) -> bool {
         self.packet_key.public().eq(other.packet_key.public())
             && self.chain_key.public().eq(other.chain_key.public())
+            && self.bjj_key.public().eq(other.bjj_key.public())
     }
 }
 
@@ -170,6 +198,7 @@ impl Randomizable for HoprKeys {
         Self {
             packet_key: OffchainKeypair::random(),
             chain_key: ChainKeypair::random(),
+            bjj_key: BjjKeypair::random(),
             id: Uuid::new_v4(),
         }
     }
@@ -230,6 +259,7 @@ impl HoprKeys {
                         id,
                         packet_key: OffchainKeypair::random(),
                         chain_key: ChainKeypair::random(),
+                        bjj_key: BjjKeypair::random(),
                     };
 
                     keys.write_eth_keystore(id_path, password)?;
@@ -287,13 +317,17 @@ impl HoprKeys {
                 let mut chain_key = [0u8; CHAIN_KEY_LENGTH];
                 chain_key.clone_from_slice(&pk.as_slice()[0..CHAIN_KEY_LENGTH]);
 
-                let ret: HoprKeys = (packet_key, chain_key).try_into().map_err(|_| {
-                    KeyPairError::GeneralError("cannot instantiate hopr keys".into())
-                })?;
+                let ret = HoprKeys {
+                    packet_key: OffchainKeypair::from_secret(&packet_key)?,
+                    chain_key: ChainKeypair::from_secret(&chain_key)?,
+                    bjj_key: BjjKeypair::random(),
+                    id: Uuid::new_v4(),
+                };
 
                 Ok((ret, true))
             }
-            V2_PRIVKEYS_LENGTH => {
+            _ => {
+                // V2 or V3 encrypted format: decrypt and parse PrivateKeys
                 decryptor.apply_keystream(&mut pk);
 
                 let private_keys = serde_json::from_slice::<PrivateKeys>(&pk)?;
@@ -318,19 +352,34 @@ impl HoprKeys {
                 let mut chain_key = [0u8; CHAIN_KEY_LENGTH];
                 chain_key.clone_from_slice(private_keys.chain_key.as_slice());
 
+                let (bjj_key, needs_migration) =
+                    if private_keys.babyjubjub_key.len() == BJJ_KEY_LENGTH {
+                        let mut bjj = [0u8; BJJ_KEY_LENGTH];
+                        bjj.clone_from_slice(private_keys.babyjubjub_key.as_slice());
+                        (bjj, false)
+                    } else if private_keys.babyjubjub_key.is_empty() {
+                        // V2 keystore without BJJ key: generate a random one
+                        let random_bjj = BjjKeypair::random();
+                        let mut bjj = [0u8; BJJ_KEY_LENGTH];
+                        bjj.clone_from_slice(random_bjj.secret().as_ref());
+                        (bjj, true)
+                    } else {
+                        return Err(KeyPairError::InvalidEncryptedKeyLength {
+                            actual: private_keys.babyjubjub_key.len(),
+                            expected: BJJ_KEY_LENGTH,
+                        });
+                    };
+
                 Ok((
                     HoprKeys {
                         packet_key: OffchainKeypair::from_secret(&packet_key)?,
                         chain_key: ChainKeypair::from_secret(&chain_key)?,
+                        bjj_key: BjjKeypair::from_secret(&bjj_key)?,
                         id: keystore.id,
                     },
-                    false,
+                    needs_migration,
                 ))
             }
-            _ => Err(KeyPairError::InvalidEncryptedKeyLength {
-                actual: pk.len(),
-                expected: V2_PRIVKEYS_LENGTH,
-            }),
         }
     }
 
@@ -357,6 +406,7 @@ impl HoprKeys {
         let private_keys = PrivateKeys {
             chain_key: self.chain_key.secret().as_ref().to_vec(),
             packet_key: self.packet_key.secret().as_ref().to_vec(),
+            babyjubjub_key: self.bjj_key.secret().as_ref().to_vec(),
             version: VERSION,
         };
 
@@ -401,6 +451,10 @@ impl HoprKeys {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
+
+    pub fn bjj_key(&self) -> &BjjKeypair {
+        &self.bjj_key
+    }
 }
 
 impl Debug for HoprKeys {
@@ -418,6 +472,13 @@ impl Debug for HoprKeys {
                 &format_args!(
                     "(priv_key: <REDACTED>, pub_key: {}",
                     self.chain_key.public().to_hex()
+                ),
+            )
+            .field(
+                "bjj_key",
+                &format_args!(
+                    "(priv_key: <REDACTED>, pub_key: {}",
+                    self.bjj_key.public().to_hex()
                 ),
             )
             .finish()
@@ -554,20 +615,29 @@ mod tests {
 
     #[test]
     fn test_from_privatekey() {
-        let private_key = "0x56b29cefcdf576eea306ba2fd5f32e651c09e0abbc018c47bdc6ef44f6b7506f1050f95137770478f50b456267f761f1b8b341a13da68bc32e5c96984fcd52ae";
+        // Generate valid keys and serialize their secrets to hex
+        let keys = HoprKeys::random();
 
-        let from_private_key =
-            HoprKeys::init(IdentityRetrievalModes::FromPrivateKey { private_key }).unwrap();
+        let mut combined = [0u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH];
+        combined[0..32].copy_from_slice(keys.packet_key.secret().as_ref());
+        combined[32..64].copy_from_slice(keys.chain_key.secret().as_ref());
+        combined[64..96].copy_from_slice(keys.bjj_key.secret().as_ref());
 
-        let private_key_without_prefix = "56b29cefcdf576eea306ba2fd5f32e651c09e0abbc018c47bdc6ef44f6b7506f1050f95137770478f50b456267f761f1b8b341a13da68bc32e5c96984fcd52ae";
+        let hex_with_prefix = format!("0x{}", const_hex::encode(&combined));
+        let hex_without_prefix = const_hex::encode(&combined);
 
-        let from_private_key_without_prefix =
-            HoprKeys::init(IdentityRetrievalModes::FromPrivateKey {
-                private_key: private_key_without_prefix,
-            })
-            .unwrap();
+        let from_prefix = HoprKeys::init(IdentityRetrievalModes::FromPrivateKey {
+            private_key: &hex_with_prefix,
+        })
+        .unwrap();
 
-        assert_eq!(from_private_key, from_private_key_without_prefix);
+        let from_without_prefix = HoprKeys::init(IdentityRetrievalModes::FromPrivateKey {
+            private_key: &hex_without_prefix,
+        })
+        .unwrap();
+
+        assert_eq!(from_prefix, from_without_prefix);
+        assert_eq!(from_prefix, keys);
     }
 
     #[test]
@@ -603,6 +673,65 @@ mod tests {
             })
             .is_err()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bjj_in_keys() -> anyhow::Result<()> {
+        let tmp = tempdir()?;
+
+        let identity_dir = tmp.path().join("hopr-unit-test-identity");
+
+        let keys = HoprKeys::random();
+
+        // Verify BJJ key is present (not zeroed out)
+        assert!(
+            keys.bjj_key.public().as_ref().iter().any(|&b| b != 0),
+            "BJJ public key should not be all zeros"
+        );
+
+        keys.write_eth_keystore(
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
+            DEFAULT_PASSWORD,
+        )?;
+
+        let (deserialized, needs_migration) = HoprKeys::read_eth_keystore(
+            identity_dir
+                .to_str()
+                .context("should be convertible to string")?,
+            DEFAULT_PASSWORD,
+        )?;
+
+        assert!(!needs_migration);
+        assert_eq!(deserialized, keys);
+        assert_eq!(deserialized.bjj_key.public(), keys.bjj_key.public());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bjj_key_accessor() -> anyhow::Result<()> {
+        let keys = HoprKeys::random();
+        let bjj = keys.bjj_key();
+        assert_eq!(bjj.public(), keys.bjj_key.public());
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_privatekey_roundtrip() -> anyhow::Result<()> {
+        let keys = HoprKeys::random();
+
+        // Serialize to combined byte array and back
+        let mut combined = [0u8; PACKET_KEY_LENGTH + CHAIN_KEY_LENGTH + BJJ_KEY_LENGTH];
+        combined[0..32].copy_from_slice(keys.packet_key.secret().as_ref());
+        combined[32..64].copy_from_slice(keys.chain_key.secret().as_ref());
+        combined[64..96].copy_from_slice(keys.bjj_key.secret().as_ref());
+
+        let deserialized: HoprKeys = combined.try_into()?;
+        assert_eq!(deserialized, keys);
 
         Ok(())
     }
