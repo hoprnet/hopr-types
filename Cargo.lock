@@ -2762,7 +2762,7 @@ dependencies = [
  "insta",
  "k256 0.14.0",
  "lazy_static",
- "libp2p-identity 0.2.14",
+ "libp2p-identity",
  "mockall",
  "multiaddr",
  "num_enum",
@@ -3282,20 +3282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-identity"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d77f16caa4f4d2667a1fad5bb1a3a4a4556967c1bff93525ebb2975847fa3de"
-dependencies = [
- "bs58",
- "hkdf 0.13.0",
- "multihash",
- "sha2 0.11.0",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3398,15 +3384,14 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.19.0"
+version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d96879ec0057cf5f99543c5333f6818c1473081684ae7ad55da21b6ea65ba214"
+checksum = "fe6351f60b488e04c1d21bc69e56b89cb3f5e8f5d22557d6e8031bdfd79b6961"
 dependencies = [
  "arrayref",
  "byteorder",
- "bytes",
  "data-encoding",
- "libp2p-identity 0.3.0",
+ "libp2p-identity",
  "multibase",
  "multihash",
  "percent-encoding",
