@@ -142,16 +142,18 @@ impl<T: KeyIvInit> IvKey<T> {
 /// use hopr_types::primitive::prelude::Address;
 /// use hopr_types::crypto::types::BjjPublicKey;
 /// use hopr_types::crypto::keypairs::{Keypair, BjjKeypair, ChainKeypair};
-/// use hopr_types::crypto::prelude::PixDepositAddress;
+/// use hopr_types::crypto::prelude::{PixDepositAddress, PixDepositAddressDiscriminants};
 ///
 /// let pub_key_1 = *BjjKeypair::random().public();
 /// let pub_key_2: PixDepositAddress = pub_key_1.into();
 ///
+/// assert_eq!(PixDepositAddressDiscriminants::Bjj, pub_key_2.address_type());
 /// assert_eq!(pub_key_1, pub_key_2.try_into().unwrap());
 ///
 /// let pub_key_1 = ChainKeypair::random().public().to_address();
 /// let pub_key_2: PixDepositAddress = pub_key_1.into();
 ///
+/// assert_eq!(PixDepositAddressDiscriminants::Eth, pub_key_2.address_type());
 /// assert_eq!(pub_key_1, pub_key_2.try_into().unwrap());
 /// ```
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash, strum::EnumDiscriminants)]
