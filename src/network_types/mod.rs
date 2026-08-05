@@ -6,8 +6,12 @@
 /// Errors thrown by the network types.
 pub mod errors;
 
-/// Network- and session-related types.
+/// HOPR Session and session-target types.
+pub mod session;
+
+/// Network host/address types.
 pub mod types;
 
 pub use errors::NetworkTypeError;
+pub use session::*;
 pub use types::*;
