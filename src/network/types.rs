@@ -132,7 +132,7 @@ impl IpOrHost {
 /// ### Example
 /// ```no_run
 /// use hopr_types::crypto::prelude::{Keypair, OffchainKeypair, PeerId};
-/// use hopr_types::network_types::{IpOrHost, SealedHost};
+/// use hopr_types::network::{IpOrHost, SealedHost};
 ///
 /// # fn main() -> anyhow::Result<()> {
 /// let keypair = OffchainKeypair::random();

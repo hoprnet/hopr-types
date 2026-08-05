@@ -19,7 +19,7 @@ pub mod internal;
 
 /// Network- and session-related types (hosts, sealed targets, session identifiers).
 #[cfg(feature = "network")]
-pub mod network_types;
+pub mod network;
 
 /// Blockchain-related types.
 #[cfg(feature = "chain")]

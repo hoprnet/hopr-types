@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors thrown by the [network types](crate::network_types).
+/// Errors thrown by the [network types](crate::network).
 #[derive(Error, Debug)]
 pub enum NetworkTypeError {
     #[error("io error: {0}")]
