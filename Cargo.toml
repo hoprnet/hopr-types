@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "2.1.2"
+version = "2.2.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -79,6 +79,8 @@ internal = [
   "dep:tracing",
 ]
 chain = ["internal", "dep:anyhow", "dep:rlp", "dep:serde", "dep:serde_with"]
+
+network = ["internal", "dep:strum", "dep:thiserror"]
 
 serde = [
   "dep:serde",
