@@ -10,7 +10,7 @@ use crate::crypto::{
 /// AES with 128-bit key in counter-mode (with big-endian counter).
 pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
-use crate::crypto::prelude::BjjPublicKey;
+use crate::crypto::prelude::{BjjPublicKey, Keypair, PublicKey};
 use crate::primitive::prelude::{Address, GeneralError};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
 pub use babyjubjub_ec::{
@@ -194,6 +194,12 @@ impl From<Address> for PixDepositAddress {
     }
 }
 
+impl From<PublicKey> for PixDepositAddress {
+    fn from(value: PublicKey) -> Self {
+        Self::Eth(value.to_address())
+    }
+}
+
 impl TryFrom<PixDepositAddress> for Address {
     type Error = GeneralError;
 
@@ -227,3 +233,21 @@ impl TryFrom<PixDepositAddress> for BjjPublicKey {
 /// Usually the [`PixDepositAddress`] can be calculated from the secret.
 #[derive(Clone, Debug)]
 pub struct PixDepositSecret(pub SecretValue<typenum::U32>);
+
+impl AsRef<SecretValue<typenum::U32>> for PixDepositSecret {
+    fn as_ref(&self) -> &SecretValue<typenum::U32> {
+        &self.0
+    }
+}
+
+impl From<PixDepositSecret> for SecretValue<typenum::U32> {
+    fn from(value: PixDepositSecret) -> Self {
+        value.0
+    }
+}
+
+impl From<SecretValue<typenum::U32>> for PixDepositSecret {
+    fn from(value: SecretValue<typenum::U32>) -> Self {
+        Self(value)
+    }
+}
