@@ -320,10 +320,9 @@ mod tests {
         assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
         assert_eq!(p1, p2);
 
-        let (s1, p1) = kp_1.unzip_into_pix();
-        let (s2, p2) = kp_2.unzip_into_pix();
-        assert_eq!(s1.0.ct_eq(&s2.0).unwrap_u8(), 1);
-        assert_eq!(p1, p2);
+        let (s1, p1) = kp_1.clone().unzip_into_pix();
+        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(p1, kp_1.public().clone().into());
     }
 
     #[test]
@@ -365,9 +364,8 @@ mod tests {
         assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
         assert_eq!(p1, p2);
 
-        let (s1, p1) = kp_1.unzip_into_pix();
-        let (s2, p2) = kp_2.unzip_into_pix();
-        assert_eq!(s1.0.ct_eq(&s2.0).unwrap_u8(), 1);
-        assert_eq!(p1, p2);
+        let (s1, p1) = kp_1.clone().unzip_into_pix();
+        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(p1, kp_1.public().clone().into());
     }
 }

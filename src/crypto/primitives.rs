@@ -10,7 +10,7 @@ use crate::crypto::{
 /// AES with 128-bit key in counter-mode (with big-endian counter).
 pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
-use crate::crypto::prelude::{BjjPublicKey, Keypair, PublicKey};
+use crate::crypto::prelude::{BjjPublicKey, PublicKey};
 use crate::primitive::prelude::{Address, GeneralError};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
 pub use babyjubjub_ec::{
