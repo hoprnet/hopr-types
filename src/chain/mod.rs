@@ -43,6 +43,11 @@ pub struct ContractAddresses {
     /// Safe registry contract
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub node_safe_registry: crate::primitive::primitives::Address,
+    /// Service registry contract.
+    ///
+    /// A network that has no deployment yet carries the zero address here.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub service_registry: crate::primitive::primitives::Address,
     /// Price oracle contract
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub ticket_price_oracle: crate::primitive::primitives::Address,
@@ -71,6 +76,7 @@ impl IntoIterator for &ContractAddresses {
             self.channels,
             self.announcements,
             self.node_safe_registry,
+            self.service_registry,
             self.ticket_price_oracle,
             self.winning_probability_oracle,
             self.node_stake_factory,
@@ -98,4 +104,46 @@ pub fn contract_addresses_for_network(name: &str) -> Option<(u64, ContractAddres
 #[inline]
 pub(in crate::chain) fn a2al(a: crate::primitive::prelude::Address) -> AlloyAddress {
     AlloyAddress::from_slice(a.as_ref())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chain::payload::tests::CONTRACT_ADDRS_JSON;
+
+    /// The `service_registry` entry of [`CONTRACT_ADDRS_JSON`], lowercased.
+    ///
+    /// The two `ContractAddresses` structs - the hand-written one and the one re-exported from
+    /// the bindings - print addresses differently (lowercase hex versus EIP-55 checksum), so
+    /// these tests compare lowercased strings and stay valid under both feature sets.
+    const SERVICE_REGISTRY: &str = "0x9a676e781a523b5d0c0e43731313a708cb607508";
+
+    #[test]
+    fn contract_addresses_round_trip_the_service_registry_through_json() -> anyhow::Result<()> {
+        let addresses: ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON)?;
+
+        assert_eq!(
+            SERVICE_REGISTRY,
+            addresses.service_registry.to_string().to_lowercase()
+        );
+
+        let reparsed: ContractAddresses =
+            serde_json::from_str(&serde_json::to_string(&addresses)?)?;
+        assert_eq!(addresses, reparsed);
+
+        Ok(())
+    }
+
+    #[test]
+    fn contract_addresses_iterate_over_the_service_registry() -> anyhow::Result<()> {
+        let addresses: ContractAddresses = serde_json::from_str(CONTRACT_ADDRS_JSON)?;
+
+        assert!(
+            (&addresses)
+                .into_iter()
+                .any(|address| address.to_string().to_lowercase() == SERVICE_REGISTRY)
+        );
+
+        Ok(())
+    }
 }

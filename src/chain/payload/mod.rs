@@ -159,6 +159,7 @@ pub(crate) mod tests {
         "node_safe_registry": "0x4F7C7dE3BA2B29ED8B2448dF2213cA43f94E45c0",
         "node_safe_migration": "0x222222222222890352Ed9Ca694EdeAC49528D8F3",
         "node_stake_factory": "0x791d190b2c95397F4BcE7bD8032FD67dCEA7a5F2",
+        "service_registry": "0x9A676e781A523b5d0C0e43731313A708CB607508",
         "token": "0xD4fdec44DB9D44B8f2b6d529620f9C0C7066A2c1",
         "ticket_price_oracle": "0x442df1d946303fB088C9377eefdaeA84146DA0A6",
         "winning_probability_oracle": "0xC15675d4CCa538D91a91a8D3EcFBB8499C3B0471",
