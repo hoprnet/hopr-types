@@ -13,6 +13,7 @@ use crate::crypto::types::BjjPublicKey;
 use crate::crypto::{
     errors,
     errors::CryptoError::InvalidInputValue,
+    primitives::{PixDepositAddress, PixDepositSecret},
     types::{OffchainPublicKey, PublicKey},
     utils::{SecretValue, k256_scalar_from_bytes, random_group_element, x25519_scalar_from_bytes},
 };
@@ -210,6 +211,28 @@ impl From<&BjjKeypair> for BjjPublicKey {
     }
 }
 
+/// Extension trait for keypairs that can be used as PIX deposit/withdrawal keys.
+///
+/// This trait is automatically implemented for all keypairs, where the public key is convertible into [`PixDepositAddress`]
+/// and the secret key is sized so that it also fits the [`PixDepositSecret`].
+pub trait PixKeypairExt: Keypair<SecretLen = typenum::U32>
+where
+    <Self as Keypair>::Public: Into<PixDepositAddress>,
+{
+    /// Consumes the instance and produces corresponding [`PixDepositSecret`] and [`PixDepositAddress`].
+    fn unzip_into_pix(self) -> (PixDepositSecret, PixDepositAddress) {
+        let (secret, public) = self.unzip();
+        (secret.into(), public.into())
+    }
+}
+
+impl<K> PixKeypairExt for K
+where
+    K: Keypair<SecretLen = typenum::U32>,
+    <K as Keypair>::Public: Into<PixDepositAddress>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use libp2p_identity::PeerId;
@@ -291,11 +314,15 @@ mod tests {
             "keypair public keys must be equal"
         );
 
-        let (s1, p1) = kp_1.unzip();
-        let (s2, p2) = kp_2.unzip();
+        let (s1, p1) = kp_1.clone().unzip();
+        let (s2, p2) = kp_2.clone().unzip();
 
         assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
         assert_eq!(p1, p2);
+
+        let (s1, p1) = kp_1.clone().unzip_into_pix();
+        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(p1, kp_1.public().clone().into());
     }
 
     #[test]
@@ -331,10 +358,14 @@ mod tests {
             "keypair public keys must be equal"
         );
 
-        let (s1, p1) = kp_1.unzip();
-        let (s2, p2) = kp_2.unzip();
+        let (s1, p1) = kp_1.clone().unzip();
+        let (s2, p2) = kp_2.clone().unzip();
 
         assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
         assert_eq!(p1, p2);
+
+        let (s1, p1) = kp_1.clone().unzip_into_pix();
+        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(p1, kp_1.public().clone().into());
     }
 }
