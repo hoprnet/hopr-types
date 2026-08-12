@@ -79,6 +79,7 @@ impl IntoIterator for &ContractAddresses {
             self.service_registry,
             self.ticket_price_oracle,
             self.winning_probability_oracle,
+            self.node_safe_migration,
             self.node_stake_factory,
             self.module_implementation,
         ]
