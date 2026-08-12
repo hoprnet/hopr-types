@@ -274,14 +274,22 @@ mod bindings_conversions {
 
     use super::*;
 
-    impl From<B256> for ServiceType {
-        /// Takes the id as-is, without rejecting the zero id.
+    impl TryFrom<B256> for ServiceType {
+        type Error = GeneralError;
+
+        /// Rejects the zero id, exactly as the contract does.
         ///
-        /// Values decoded from chain data can hold any `bytes32`, and a consumer that is
-        /// mirroring logs wants them all. Use `ServiceType::try_from(value.0)` where the zero id
-        /// has to be rejected instead.
-        fn from(value: B256) -> Self {
-            Self(value.0)
+        /// No registry log can carry a zero id: `registerServiceType` is the only path that
+        /// creates a service type and it reverts with `ZeroServiceType`, and every other event
+        /// is keyed on a type that already exists. A zero id reaching this conversion therefore
+        /// means the caller decoded something that is not a registry log.
+        ///
+        /// This deliberately has no infallible counterpart. An `impl From<B256>` would make the
+        /// standard library's blanket `TryFrom` apply instead, and every `try_from` call site
+        /// would silently stop checking anything while still compiling and still returning
+        /// `Result`.
+        fn try_from(value: B256) -> Result<Self, Self::Error> {
+            Self::try_from(value.0)
         }
     }
 
@@ -297,7 +305,7 @@ mod bindings_conversions {
             let registered_at = seconds_to_system_time(value.registeredAt.to::<u64>());
 
             Self::new(
-                value.serviceType.into(),
+                value.serviceType.try_into()?,
                 Address::from(value.node.0.0),
                 Address::from(value.safe.0.0),
                 value.metadata.to_vec().try_into()?,
@@ -318,7 +326,7 @@ mod bindings_conversions {
             let updated_at = seconds_to_system_time(value.updatedAt.to::<u64>());
 
             Self::new(
-                value.serviceType.into(),
+                value.serviceType.try_into()?,
                 Address::from(value.node.0.0),
                 Address::from(value.safe.0.0),
                 value.metadata.to_vec().try_into()?,
@@ -596,14 +604,18 @@ mod tests {
         }
 
         #[test]
-        fn service_type_converts_from_a_b256_unchecked() {
+        fn service_type_conversion_from_b256_rejects_the_zero_id() -> anyhow::Result<()> {
             assert_eq!(
                 ServiceType::GVPN_EXIT,
-                ServiceType::from(B256::from(GVPN_EXIT_ENCODED))
+                ServiceType::try_from(B256::from(GVPN_EXIT_ENCODED))?
             );
 
-            // Chain data may hold any id, so the unchecked conversion accepts the zero id too.
-            assert_eq!([0u8; 32], ServiceType::from(B256::ZERO).as_encoded());
+            // No registry log can carry the zero id, so the conversion has no reason to admit
+            // it: `registerServiceType` is the only path that creates a type and it reverts
+            // with `ZeroServiceType`.
+            assert!(ServiceType::try_from(B256::ZERO).is_err());
+
+            Ok(())
         }
 
         #[test]
