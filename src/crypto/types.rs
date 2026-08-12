@@ -597,6 +597,16 @@ impl BjjPublicKey {
         let point = babyjubjub_ec::ProjectivePoint::GENERATOR * scalar;
         point.try_into()
     }
+
+    /// Returns the affine point coordinates as canonical decimal strings.
+    ///
+    /// This is the lossless boundary representation used by BabyJubJub systems
+    /// whose field implementation differs from the one used by `hopr-types`.
+    pub fn to_decimal_coordinates(&self) -> (String, String) {
+        let point: babyjubjub_ec::ProjectivePoint = self.into();
+        let affine = point.to_affine();
+        (affine.x().to_string(), affine.y().to_string())
+    }
 }
 
 impl Display for BjjPublicKey {
