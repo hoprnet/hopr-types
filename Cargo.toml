@@ -155,7 +155,7 @@ const-hex = { version = "1.19.1", optional = true, default-features = false, fea
 ] }
 hash2curve = { version = "0.14.0", optional = true }
 hex-literal = { version = "1.1.0", optional = true }
-hopr-bindings = { version = "4.12.1", optional = true }
+hopr-bindings = { version = "4.13.0", optional = true }
 k256 = { version = "0.14.0", optional = true, features = [
   "arithmetic",
   "ecdh",
@@ -211,7 +211,7 @@ uuid = { version = "1.24.0", optional = true, features = ["serde", "v4"] }
 zeroize = { version = "1.9.0", optional = true, features = ["zeroize_derive"] }
 
 [dev-dependencies]
-hopr-bindings = "4.9.1"
+hopr-bindings = "4.13.0"
 anyhow = "1.0.102"
 bimap = "0.6.3"
 criterion = "0.8.2"
