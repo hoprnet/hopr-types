@@ -1,4 +1,4 @@
-use std::{fmt::Formatter, marker::PhantomData, str::FromStr};
+use std::{fmt::Formatter, marker::PhantomData};
 
 use typenum::Unsigned;
 
@@ -14,7 +14,7 @@ use crate::crypto::{
     errors::CryptoError,
     prelude::{BjjKeypair, BjjPublicKey, Keypair, PublicKey},
 };
-use crate::primitive::prelude::{Address, BytesRepresentable, GeneralError, ToHex};
+use crate::primitive::prelude::{Address, GeneralError};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
 pub use babyjubjub_ec::{
     BabyJubJub, GroupRepr as BabyJubJubCompressedPoint, Scalar as BabyJubJubScalar,
@@ -37,111 +37,6 @@ pub use poly1305::Poly1305;
 /// Keccak-256 and SHA3-256 hash functions, re-exported from the [`sha3`] crate.
 pub use sha3::{Keccak256, Sha3_256};
 use strum::IntoDiscriminant;
-
-const PIX_FIELD_ELEMENT_SIZE: usize = 32;
-
-macro_rules! pix_field_element {
-    ($name:ident, $doc:literal) => {
-        #[doc = $doc]
-        #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name(
-            #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-            [u8; PIX_FIELD_ELEMENT_SIZE],
-        );
-
-        impl AsRef<[u8]> for $name {
-            fn as_ref(&self) -> &[u8] {
-                &self.0
-            }
-        }
-
-        impl TryFrom<&[u8]> for $name {
-            type Error = GeneralError;
-
-            fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-                value
-                    .try_into()
-                    .map(Self)
-                    .map_err(|_| GeneralError::ParseError(stringify!($name).into()))
-            }
-        }
-
-        impl BytesRepresentable for $name {
-            const SIZE: usize = PIX_FIELD_ELEMENT_SIZE;
-        }
-
-        impl From<[u8; PIX_FIELD_ELEMENT_SIZE]> for $name {
-            fn from(value: [u8; PIX_FIELD_ELEMENT_SIZE]) -> Self {
-                Self(value)
-            }
-        }
-
-        impl From<$name> for [u8; PIX_FIELD_ELEMENT_SIZE] {
-            fn from(value: $name) -> Self {
-                value.0
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                f.write_str(&self.to_hex())
-            }
-        }
-
-        impl FromStr for $name {
-            type Err = GeneralError;
-
-            fn from_str(value: &str) -> Result<Self, Self::Err> {
-                Self::from_hex(value)
-            }
-        }
-    };
-}
-
-pix_field_element!(
-    PixNoteId,
-    "A Curvy/PIX note identifier encoded as exactly 32 bytes."
-);
-pix_field_element!(
-    PixNoteTreeRoot,
-    "A root of the Curvy/PIX depth-30 note commitment tree encoded as exactly 32 bytes."
-);
-
-/// Depth of the Curvy note commitment tree.
-pub const PIX_NOTE_TREE_DEPTH: u8 = 30;
-/// Level at which complete Curvy note subtrees are persisted as shards.
-pub const PIX_NOTE_TREE_SHARD_LEVEL: u8 = 14;
-/// Number of dense, non-padding leaves in one completed Curvy note-tree shard.
-pub const PIX_NOTE_TREE_SHARD_SIZE: u64 = 1 << PIX_NOTE_TREE_SHARD_LEVEL;
-
-/// Position of a non-zero note in the dense Curvy note commitment tree.
-///
-/// This is independent from the raw event `item_index`: zero-padded event slots
-/// retain their raw cursor position but do not consume a Merkle leaf position.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PixNoteTreeLeafIndex(pub u64);
-
-/// A pinned view of the indexed Curvy note commitment tree.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PixNoteTreeCheckpoint {
-    /// Root at this checkpoint.
-    pub root: PixNoteTreeRoot,
-    /// Number of dense, non-zero leaves included in `root`.
-    pub leaf_count: u64,
-}
-
-/// Root of one completed level-14 Curvy note-tree shard.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PixNoteTreeShardRoot {
-    /// Zero-based shard index.
-    pub shard_index: u64,
-    /// Root of the 16,384-leaf shard.
-    pub root: PixNoteTreeRoot,
-}
 
 /// Represents a 256-bit secret key of fixed length.
 /// The value is auto-zeroized on drop.
@@ -340,7 +235,8 @@ impl TryFrom<PixDepositAddress> for BjjPublicKey {
 ///
 /// The curve tag is part of the secret so the same 32 bytes cannot accidentally
 /// be interpreted using a different key derivation profile. BabyJubJub scalars
-/// use their canonical little-endian representation; Ethereum scalars use the
+/// use the HOPR canonical big-endian representation; the Curvy adapter converts
+/// them explicitly at its little-endian SDK boundary. Ethereum scalars use the
 /// canonical secp256k1 big-endian representation.
 #[derive(Clone, Debug)]
 pub enum PixDepositSecret {

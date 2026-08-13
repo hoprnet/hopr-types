@@ -14,10 +14,30 @@ pub type SessionId = crate::internal::protocol::HoprPseudonym;
 /// A session may create several deposit addresses, so the session identifier
 /// alone is not sufficient as a durable allocation key.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PixAddressId {
     session_id: SessionId,
     allocation_index: NonZeroU32,
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for PixAddressId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.to_bytes())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PixAddressId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = <serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer)?;
+        Self::try_from(bytes.as_ref()).map_err(serde::de::Error::custom)
+    }
 }
 
 impl PixAddressId {
@@ -124,5 +144,19 @@ mod tests {
         bytes[..SessionId::SIZE].copy_from_slice(SessionId::from([7_u8; SessionId::SIZE]).as_ref());
 
         assert!(PixAddressId::try_from(bytes.as_slice()).is_err());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pix_address_id_serde_uses_the_stable_byte_encoding() -> anyhow::Result<()> {
+        let id = PixAddressId::new(
+            SessionId::from([7_u8; SessionId::SIZE]),
+            NonZeroU32::new(3).ok_or_else(|| anyhow::anyhow!("index must be non-zero"))?,
+        );
+
+        let encoded = serde_json::to_vec(&id)?;
+        assert_eq!(serde_json::from_slice::<PixAddressId>(&encoded)?, id);
+        assert_eq!(serde_json::from_slice::<Vec<u8>>(&encoded)?, id.to_bytes());
+        Ok(())
     }
 }
