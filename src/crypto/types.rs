@@ -1494,8 +1494,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bn254_public_key_rejects_invalid()
-    -> anyhow::Result<()> {
+    fn test_bn254_public_key_rejects_invalid() -> anyhow::Result<()> {
         use ark_ff::PrimeField;
 
         // Deserialization of invalid 32 bytes (identity point)
