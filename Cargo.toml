@@ -165,7 +165,7 @@ hash2curve = { version = "0.14.0", optional = true }
 hex-literal = { version = "1.1.0", optional = true }
 # TODO: revert to a crates.io version once contracts publishes a release containing
 # HoprServiceRegistry (local version 4.12.2). Keep in sync with the dev-dependency below.
-hopr-bindings = { git = "https://github.com/hoprnet/contracts", rev = "6ce45eb5e7d433545d82ea32e27562eb0fc329c3", optional = true }
+hopr-bindings = { git = "https://github.com/hoprnet/contracts", rev = "0eea1981c67343e65ff4e5ecb0b81b9ddc201b14", optional = true }
 k256 = { version = "0.14.0", optional = true, features = [
   "arithmetic",
   "ecdh",
@@ -223,7 +223,7 @@ zeroize = { version = "1.9.0", optional = true, features = ["zeroize_derive"] }
 [dev-dependencies]
 # TODO: revert to a crates.io version once contracts publishes a release containing
 # HoprServiceRegistry. Must resolve to the same source as the dependency above.
-hopr-bindings = { git = "https://github.com/hoprnet/contracts", rev = "6ce45eb5e7d433545d82ea32e27562eb0fc329c3" }
+hopr-bindings = { git = "https://github.com/hoprnet/contracts", rev = "0eea1981c67343e65ff4e5ecb0b81b9ddc201b14" }
 anyhow = "1.0.102"
 bimap = "0.6.3"
 criterion = "0.8.2"
