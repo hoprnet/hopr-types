@@ -10,6 +10,7 @@ use sha2::Sha512;
 use subtle::{Choice, ConstantTimeEq};
 
 use crate::crypto::types::BjjPublicKey;
+use crate::crypto::types::Bn254PublicKey;
 use crate::crypto::{
     errors,
     errors::CryptoError::InvalidInputValue,
@@ -211,6 +212,47 @@ impl From<&BjjKeypair> for BjjPublicKey {
     }
 }
 
+/// Represents a keypair consisting of BN254 private and public keys.
+#[derive(Clone, Debug)]
+pub struct Bn254Keypair(SecretValue<typenum::U32>, Bn254PublicKey);
+
+impl Keypair for Bn254Keypair {
+    type Public = Bn254PublicKey;
+    type SecretLen = typenum::U32;
+
+    fn random() -> Self {
+        let mut ret = Self::from_secret(SecretValue::<typenum::U32>::random().as_ref());
+        while ret.is_err() {
+            ret = Self::from_secret(SecretValue::<typenum::U32>::random().as_ref());
+        }
+        ret.unwrap()
+    }
+
+    fn from_secret(bytes: &[u8]) -> errors::Result<Self> {
+        Bn254PublicKey::from_privkey(bytes).and_then(|pub_key| Ok(Self(bytes.try_into()?, pub_key)))
+    }
+
+    fn secret(&self) -> &SecretValue<Self::SecretLen> {
+        &self.0
+    }
+
+    fn public(&self) -> &Self::Public {
+        &self.1
+    }
+}
+
+impl ConstantTimeEq for Bn254Keypair {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.secret().ct_eq(other.secret())
+    }
+}
+
+impl From<&Bn254Keypair> for Bn254PublicKey {
+    fn from(value: &Bn254Keypair) -> Self {
+        *value.public()
+    }
+}
+
 /// Extension trait for keypairs that can be used as PIX deposit/withdrawal keys.
 ///
 /// This trait is automatically implemented for all keypairs, where the public key is convertible into [`PixDepositAddress`]
@@ -367,5 +409,45 @@ mod tests {
         let (s1, p1) = kp_1.clone().unzip_into_pix();
         assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
         assert_eq!(p1, kp_1.public().clone().into());
+    }
+
+    #[test]
+    fn test_bn254_keypair() {
+        let kp_1 = Bn254Keypair::random();
+
+        let public = Bn254PublicKey::from_privkey(kp_1.secret().as_ref()).unwrap();
+        assert_eq!(
+            &public,
+            kp_1.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            public,
+            Bn254PublicKey::from(&kp_1),
+            "secret keys must yield compatible public keys"
+        );
+
+        let kp_2 = Bn254Keypair::from_secret(kp_1.secret().as_ref()).unwrap();
+        assert_eq!(
+            kp_1.ct_eq(&kp_2).unwrap_u8(),
+            1,
+            "keypairs generated from secrets must be equal"
+        );
+        assert_eq!(
+            &public,
+            kp_2.public(),
+            "secret keys must yield compatible public keys"
+        );
+        assert_eq!(
+            kp_1.public(),
+            kp_2.public(),
+            "keypair public keys must be equal"
+        );
+
+        let (s1, p1) = kp_1.clone().unzip();
+        let (s2, p2) = kp_2.clone().unzip();
+
+        assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
+        assert_eq!(p1, p2);
     }
 }

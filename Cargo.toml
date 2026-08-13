@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "2.2.2"
+version = "2.3.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -44,6 +44,10 @@ random = ["dep:hybrid-array", "dep:rand"]
 crypto = [
   "primitive",
   "random",
+  "dep:ark-bn254",
+  "dep:ark-ec",
+  "dep:ark-ff",
+  "dep:ark-serialize",
   "dep:arrayvec",
   "dep:aes",
   "dep:blake3",
@@ -121,6 +125,10 @@ telemetry = [
 aes = { version = "0.9.2", optional = true }
 anyhow = { version = "1.0.104", optional = true }
 aquamarine = { version = "0.6.0", optional = true }
+ark-bn254 = { version = "0.6", optional = true }
+ark-ec = { version = "0.6", optional = true }
+ark-ff = { version = "0.6", optional = true }
+ark-serialize = { version = "0.6", optional = true }
 arrayvec = { version = "0.7.8", optional = true }
 async-trait = { version = "0.1.91", optional = true }
 babyjubjub-ec = { version = "0.4.0", optional = true, features = [

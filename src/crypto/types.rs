@@ -695,6 +695,149 @@ impl TryFrom<babyjubjub_ec::AffinePoint> for BjjPublicKey {
     }
 }
 
+/// Implements a public key for the BN254 curve (also known as alt-BN128).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Bn254PublicKey(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
+
+impl Bn254PublicKey {
+    pub fn from_privkey(secret: &[u8]) -> Result<Self> {
+        use ark_ec::{AffineRepr, PrimeGroup};
+        use ark_serialize::CanonicalSerialize;
+
+        let bytes: [u8; 32] = secret
+            .try_into()
+            .map_err(|_| CryptoError::InvalidSecretScalar)?;
+
+        use ark_ff::PrimeField;
+        let scalar = ark_bn254::Fr::from_le_bytes_mod_order(&bytes);
+        let point = ark_bn254::G1Projective::generator() * scalar;
+        let affine = ark_bn254::G1Affine::from(point);
+
+        if affine.is_zero() {
+            return Err(CryptoError::InvalidSecretScalar);
+        }
+
+        let mut buf = [0u8; Self::SIZE];
+        affine
+            .serialize_compressed(&mut buf[..])
+            .map_err(|_| CryptoError::InvalidPublicKey)?;
+
+        Ok(Self(buf))
+    }
+}
+
+impl Display for Bn254PublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+impl FromStr for Bn254PublicKey {
+    type Err = GeneralError;
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
+impl AsRef<[u8]> for Bn254PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for Bn254PublicKey {
+    type Error = GeneralError;
+    fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
+        if value.len() != Self::SIZE {
+            return Err(ParseError("Bn254PublicKey".into()));
+        }
+
+        let repr_bytes: [u8; 32] = value
+            .try_into()
+            .map_err(|_| ParseError("Bn254PublicKey".into()))?;
+
+        use ark_ec::AffineRepr;
+        use ark_serialize::CanonicalDeserialize;
+
+        let affine = ark_bn254::G1Affine::deserialize_compressed(&repr_bytes[..])
+            .map_err(|_| ParseError("Bn254PublicKey".into()))?;
+
+        if affine.is_zero() {
+            return Err(ParseError("Bn254PublicKey".into()));
+        }
+        // BN254 has cofactor=1 for G1, so any valid curve point is in the prime-order subgroup.
+
+        Ok(Self(repr_bytes))
+    }
+}
+
+impl BytesRepresentable for Bn254PublicKey {
+    const SIZE: usize = 32;
+}
+
+impl TryFrom<&ark_bn254::G1Projective> for Bn254PublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &ark_bn254::G1Projective) -> result::Result<Self, Self::Error> {
+        use ark_ec::AffineRepr;
+        use ark_serialize::CanonicalSerialize;
+
+        let affine = ark_bn254::G1Affine::from(*value);
+        if affine.is_zero() {
+            return Err(CryptoError::InvalidPublicKey);
+        }
+
+        let mut buf = [0u8; Self::SIZE];
+        affine
+            .serialize_compressed(&mut buf[..])
+            .map_err(|_| CryptoError::InvalidPublicKey)?;
+
+        Ok(Self(buf))
+    }
+}
+
+impl TryFrom<ark_bn254::G1Projective> for Bn254PublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: ark_bn254::G1Projective) -> result::Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl From<&Bn254PublicKey> for ark_bn254::G1Projective {
+    fn from(value: &Bn254PublicKey) -> ark_bn254::G1Projective {
+        use ark_serialize::CanonicalDeserialize;
+
+        let affine = ark_bn254::G1Affine::deserialize_compressed(&value.0[..])
+            .expect("Bn254PublicKey is always valid");
+        affine.into()
+    }
+}
+
+impl From<Bn254PublicKey> for ark_bn254::G1Projective {
+    fn from(value: Bn254PublicKey) -> ark_bn254::G1Projective {
+        (&value).into()
+    }
+}
+
+impl TryFrom<&ark_bn254::G1Affine> for Bn254PublicKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &ark_bn254::G1Affine) -> result::Result<Self, Self::Error> {
+        (ark_bn254::G1Projective::from(*value)).try_into()
+    }
+}
+
+impl TryFrom<ark_bn254::G1Affine> for Bn254PublicKey {
+    type Error = CryptoError;
+    fn try_from(value: ark_bn254::G1Affine) -> result::Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
 /// Length of a packet tag
 pub const PACKET_TAG_LENGTH: usize = 16;
 
@@ -1164,7 +1307,7 @@ mod tests {
     use libp2p_identity::PeerId;
     use std::str::FromStr;
 
-    use crate::crypto::prelude::BjjKeypair;
+    use crate::crypto::prelude::{BjjKeypair, Bn254Keypair, Bn254PublicKey};
     use crate::crypto::types::BjjPublicKey;
     use crate::crypto::{
         keypairs::{Keypair, OffchainKeypair},
@@ -1282,6 +1425,27 @@ mod tests {
 
         let proj: babyjubjub_ec::ProjectivePoint = pk1.into();
         assert_eq!(BjjPublicKey::try_from(proj)?, pk1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bn254_public_key() -> anyhow::Result<()> {
+        let (s, pk1) = Bn254Keypair::random().unzip();
+
+        let pk2 = Bn254PublicKey::from_privkey(s.as_ref())?;
+        assert_eq!(pk1, pk2, "from privkey failed");
+
+        let pk3 = Bn254PublicKey::try_from(pk1.as_ref())?;
+        assert_eq!(pk1, pk3, "from bytes failed");
+
+        assert_eq!(Bn254PublicKey::from_str(&pk1.to_string())?, pk1);
+
+        // Must reject identity point
+        assert!(Bn254PublicKey::try_from(ark_bn254::G1Projective::default()).is_err());
+
+        let proj: ark_bn254::G1Projective = pk1.into();
+        assert_eq!(Bn254PublicKey::try_from(proj)?, pk1);
 
         Ok(())
     }
