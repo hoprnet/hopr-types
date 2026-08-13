@@ -47,6 +47,14 @@ mod selectors {
     pub const REGISTER_SAFE_BY_NODE: [u8; 4] = hex!("7f935931");
     /// `deregisterNodeBySafe(address)`
     pub const DEREGISTER_NODE_BY_SAFE: [u8; 4] = hex!("91607c4c");
+    /// `selfRegister(bytes32,address,bytes)`
+    pub const SELF_REGISTER: [u8; 4] = hex!("326005af");
+    /// `selfUpdate(bytes32,address,bytes)`
+    pub const SELF_UPDATE: [u8; 4] = hex!("210c3298");
+    /// `selfDeregister(bytes32,address)`
+    pub const SELF_DEREGISTER: [u8; 4] = hex!("1e46f907");
+    /// Safe MultiSend `multiSend(bytes)`
+    pub const MULTI_SEND: [u8; 4] = hex!("8d80ff0a");
     /// Gnosis Safe `execTransactionFromModule(address,uint256,bytes,uint8)`
     pub const EXEC_TRANSACTION_FROM_MODULE: [u8; 4] = hex!("468721a7");
     /// `fundChannel(address,uint96)`
@@ -154,7 +162,11 @@ fn encode_deregister_node_by_safe(node_addr: [u8; 20]) -> Vec<u8> {
 }
 
 /// Gnosis Safe module: `execTransactionFromModule(address,uint256,bytes,uint8)`.
-fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
+fn encode_exec_from_module_with_operation(
+    to: [u8; 20],
+    call_data: &[u8],
+    operation: u8,
+) -> Vec<u8> {
     // Layout: selector | to | value(0) | offset | operation(0) | tail
     let offset = 4usize * 32; // 4 head slots → offset = 128
     let tail = abi_dyn_tail(call_data);
@@ -163,9 +175,61 @@ fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
     out.extend_from_slice(&addr32(to));
     out.extend_from_slice(&[0u8; 32]); // value = 0
     out.extend_from_slice(&word_usize(offset));
-    out.extend_from_slice(&[0u8; 32]); // operation = 0 (Call)
+    out.extend_from_slice(&right_align32(&[operation]));
     out.extend_from_slice(&tail);
     out
+}
+
+fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
+    encode_exec_from_module_with_operation(to, call_data, 0)
+}
+
+fn encode_service_write(
+    selector: [u8; 4],
+    service_type: ServiceType,
+    node: [u8; 20],
+    metadata: &[u8],
+) -> Vec<u8> {
+    call_with_bytes(
+        selector,
+        &[service_type.as_encoded(), addr32(node)],
+        metadata,
+    )
+}
+
+fn encode_service_deregister(service_type: ServiceType, node: [u8; 20]) -> Vec<u8> {
+    static_call(
+        selectors::SELF_DEREGISTER,
+        &[service_type.as_encoded(), addr32(node)],
+    )
+}
+
+fn encode_multi_send_transaction(to: [u8; 20], data: &[u8]) -> Vec<u8> {
+    let mut encoded = Vec::with_capacity(85 + data.len());
+    encoded.push(0);
+    encoded.extend_from_slice(&to);
+    encoded.extend_from_slice(&[0u8; 32]);
+    encoded.extend_from_slice(&word_usize(data.len()));
+    encoded.extend_from_slice(data);
+    encoded
+}
+
+const SAFE_MULTI_SEND_ADDRESS: [u8; 20] = hex!("38869bf66a61cf6bdb996a6ae40d5853fd43b526");
+
+fn paid_service_registry_payload(
+    token: [u8; 20],
+    registry: [u8; 20],
+    registry_call: &[u8],
+    burn: HoprBalance,
+) -> Vec<u8> {
+    let mut transactions = Vec::new();
+    if !burn.is_zero() {
+        let approval = encode_approve(registry, &burn.amount().to_be_bytes());
+        transactions.extend_from_slice(&encode_multi_send_transaction(token, &approval));
+    }
+    transactions.extend_from_slice(&encode_multi_send_transaction(registry, registry_call));
+    let multi_send = call_with_bytes(selectors::MULTI_SEND, &[], &transactions);
+    encode_exec_from_module_with_operation(SAFE_MULTI_SEND_ADDRESS, &multi_send, 1)
 }
 
 fn encode_fund_channel(account: [u8; 20], amount_word: [u8; 32]) -> Vec<u8> {
@@ -672,6 +736,54 @@ impl PayloadGenerator for BasicPayloadGenerator {
         ))
     }
 
+    fn register_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        registration_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        if !registration_burn.is_zero() {
+            return Err(InvalidState(
+                "paid service writes require a Safe payload generator",
+            ));
+        }
+        Ok(TransactionRequest::default()
+            .with_input(encode_service_write(
+                selectors::SELF_REGISTER,
+                service_type,
+                self.me.into(),
+                metadata.as_ref(),
+            ))
+            .with_to(self.contract_addrs.service_registry.into()))
+    }
+
+    fn update_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        update_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        if !update_burn.is_zero() {
+            return Err(InvalidState(
+                "paid service writes require a Safe payload generator",
+            ));
+        }
+        Ok(TransactionRequest::default()
+            .with_input(encode_service_write(
+                selectors::SELF_UPDATE,
+                service_type,
+                self.me.into(),
+                metadata.as_ref(),
+            ))
+            .with_to(self.contract_addrs.service_registry.into()))
+    }
+
+    fn deregister_service(&self, service_type: ServiceType) -> payload::Result<Self::TxRequest> {
+        Ok(TransactionRequest::default()
+            .with_input(encode_service_deregister(service_type, self.me.into()))
+            .with_to(self.contract_addrs.service_registry.into()))
+    }
+
     fn deploy_safe(
         &self,
         balance: HoprBalance,
@@ -841,6 +953,57 @@ impl PayloadGenerator for SafePayloadGenerator {
             .with_input(encode_deregister_node_by_safe(self.me.into()))
             .with_to(self.module.into())
             .with_gas_limit(DEFAULT_TX_GAS))
+    }
+
+    fn register_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        registration_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        let call = encode_service_write(
+            selectors::SELF_REGISTER,
+            service_type,
+            self.me.into(),
+            metadata.as_ref(),
+        );
+        Ok(TransactionRequest::default()
+            .with_input(paid_service_registry_payload(
+                self.contract_addrs.token.into(),
+                self.contract_addrs.service_registry.into(),
+                &call,
+                registration_burn,
+            ))
+            .with_to(self.module.into())
+            .with_gas_limit(DEFAULT_TX_GAS))
+    }
+
+    fn update_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        update_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        let call = encode_service_write(
+            selectors::SELF_UPDATE,
+            service_type,
+            self.me.into(),
+            metadata.as_ref(),
+        );
+        Ok(TransactionRequest::default()
+            .with_input(paid_service_registry_payload(
+                self.contract_addrs.token.into(),
+                self.contract_addrs.service_registry.into(),
+                &call,
+                update_burn,
+            ))
+            .with_to(self.module.into())
+            .with_gas_limit(DEFAULT_TX_GAS))
+    }
+
+    fn deregister_service(&self, service_type: ServiceType) -> payload::Result<Self::TxRequest> {
+        let call = encode_service_deregister(service_type, self.me.into());
+        Ok(self.module_exec_tx(self.contract_addrs.service_registry.into(), &call))
     }
 
     fn deploy_safe(

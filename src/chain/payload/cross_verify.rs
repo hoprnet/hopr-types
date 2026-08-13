@@ -496,3 +496,76 @@ async fn deregister_node_by_safe() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn register_service_safe_with_burn() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let service_type = ServiceType::from_str("gvpn:exit")?;
+    let metadata = ServiceMetadata::try_from(br#"{\"endpoint\":\"1.2.3.4:443\"}"#.to_vec())?;
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "register_service_safe_with_burn",
+        b_gen.register_service(service_type, metadata.clone(), HoprBalance::from(100))?,
+        s_gen.register_service(service_type, metadata, HoprBalance::from(100))?,
+        19,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn update_service_safe_without_burn() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let service_type = ServiceType::from_str("gvpn:exit")?;
+    let metadata = ServiceMetadata::try_from(b"updated".to_vec())?;
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "update_service_safe_without_burn",
+        b_gen.update_service(service_type, metadata.clone(), HoprBalance::zero())?,
+        s_gen.update_service(service_type, metadata, HoprBalance::zero())?,
+        20,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn deregister_service_safe() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let service_type = ServiceType::from_str("gvpn:exit")?;
+    let (b_gen, s_gen) = safe_gens(&key);
+
+    assert_signed_eq!(
+        "deregister_service_safe",
+        b_gen.deregister_service(service_type)?,
+        s_gen.deregister_service(service_type)?,
+        21,
+        1,
+        &key
+    );
+    Ok(())
+}
+
+#[test]
+fn paid_service_write_requires_safe_generator() -> anyhow::Result<()> {
+    let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let service_type = ServiceType::from_str("gvpn:exit")?;
+    let metadata = ServiceMetadata::try_from(b"metadata".to_vec())?;
+    let (b_gen, s_gen) = basic_gens(&key);
+
+    assert!(
+        b_gen
+            .register_service(service_type, metadata.clone(), HoprBalance::from(1))
+            .is_err()
+    );
+    assert!(
+        s_gen
+            .register_service(service_type, metadata, HoprBalance::from(1))
+            .is_err()
+    );
+    Ok(())
+}

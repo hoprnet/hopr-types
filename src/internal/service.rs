@@ -6,8 +6,8 @@
 //! validate only what the contract itself guarantees - a non-zero type id and the metadata length
 //! cap - and leave the meaning of the bytes to the consumer.
 //!
-//! This is read-side vocabulary only. Building registry calldata is the job of the operator
-//! tooling, which encodes it from the contract bindings directly.
+//! The same validated identifiers and metadata are also accepted by the chain payload generators,
+//! so reads and writes cannot disagree about the registry's input invariants.
 
 use std::fmt::{Debug, Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};

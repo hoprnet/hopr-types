@@ -129,6 +129,29 @@ pub trait PayloadGenerator {
     /// the node no longer manages the funds.
     fn deregister_node_by_safe(&self) -> Result<Self::TxRequest>;
 
+    /// Creates an atomic service-registry registration payload for this node.
+    ///
+    /// Safe-backed generators bundle an exact wxHOPR approval with the registry call. The
+    /// approval is consumed by the registry in the same transaction and therefore also protects
+    /// the caller against a concurrent burn increase.
+    fn register_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        registration_burn: HoprBalance,
+    ) -> Result<Self::TxRequest>;
+
+    /// Creates an atomic service-registry update payload for this node.
+    fn update_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        update_burn: HoprBalance,
+    ) -> Result<Self::TxRequest>;
+
+    /// Creates a service-registry deregistration payload for this node.
+    fn deregister_service(&self, service_type: ServiceType) -> Result<Self::TxRequest>;
+
     /// Creates a transaction payload to deploy a new Safe instance with the initial
     /// `balance` transferred from the signer and `admins` as Safe owners.
     ///
