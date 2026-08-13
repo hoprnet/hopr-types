@@ -697,21 +697,50 @@ impl TryFrom<babyjubjub_ec::AffinePoint> for BjjPublicKey {
 
 /// Implements a public key for the BN254 curve (also known as alt-BN128).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Bn254PublicKey(
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
 );
 
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Bn254PublicKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let buf = serde_bytes::ByteBuf::deserialize(deserializer)?;
+        Self::try_from(buf.as_ref()).map_err(serde::de::Error::custom)
+    }
+}
+
 impl Bn254PublicKey {
+    /// Derives a [`Bn254PublicKey`] from a little-endian 32-byte secret scalar.
+    ///
+    /// Returns [`CryptoError::InvalidSecretScalar`] if:
+    /// - the input is not exactly 32 bytes,
+    /// - the scalar is zero, or
+    /// - the scalar is greater than or equal to the BN254 Fr field modulus.
     pub fn from_privkey(secret: &[u8]) -> Result<Self> {
         use ark_ec::{AffineRepr, PrimeGroup};
+        use ark_ff::{BigInt, PrimeField};
         use ark_serialize::CanonicalSerialize;
 
         let bytes: [u8; 32] = secret
             .try_into()
             .map_err(|_| CryptoError::InvalidSecretScalar)?;
 
-        use ark_ff::PrimeField;
+        // Reject non-canonical scalars >= Fr::MODULUS.
+        // Using from_le_bytes_mod_order alone is not sufficient: s and s + r
+        // produce the same public key, but Bn254Keypair::secret() retains
+        // the unreduced bytes, creating key-consistency problems.
+        let mut limbs = [0u64; 4];
+        for (i, chunk) in bytes.chunks(8).enumerate() {
+            limbs[i] = u64::from_le_bytes(chunk.try_into().expect("8 bytes"));
+        }
+        if BigInt::<4>::new(limbs) >= ark_bn254::Fr::MODULUS {
+            return Err(CryptoError::InvalidSecretScalar);
+        }
+
         let scalar = ark_bn254::Fr::from_le_bytes_mod_order(&bytes);
         let point = ark_bn254::G1Projective::generator() * scalar;
         let affine = ark_bn254::G1Affine::from(point);
@@ -807,19 +836,23 @@ impl TryFrom<ark_bn254::G1Projective> for Bn254PublicKey {
     }
 }
 
-impl From<&Bn254PublicKey> for ark_bn254::G1Projective {
-    fn from(value: &Bn254PublicKey) -> ark_bn254::G1Projective {
+impl TryFrom<&Bn254PublicKey> for ark_bn254::G1Projective {
+    type Error = CryptoError;
+
+    fn try_from(value: &Bn254PublicKey) -> result::Result<ark_bn254::G1Projective, Self::Error> {
         use ark_serialize::CanonicalDeserialize;
 
         let affine = ark_bn254::G1Affine::deserialize_compressed(&value.0[..])
-            .expect("Bn254PublicKey is always valid");
-        affine.into()
+            .map_err(|_| CryptoError::InvalidPublicKey)?;
+        Ok(affine.into())
     }
 }
 
-impl From<Bn254PublicKey> for ark_bn254::G1Projective {
-    fn from(value: Bn254PublicKey) -> ark_bn254::G1Projective {
-        (&value).into()
+impl TryFrom<Bn254PublicKey> for ark_bn254::G1Projective {
+    type Error = CryptoError;
+
+    fn try_from(value: Bn254PublicKey) -> result::Result<ark_bn254::G1Projective, Self::Error> {
+        (&value).try_into()
     }
 }
 
@@ -1442,10 +1475,91 @@ mod tests {
         assert_eq!(Bn254PublicKey::from_str(&pk1.to_string())?, pk1);
 
         // Must reject identity point
-        assert!(Bn254PublicKey::try_from(ark_bn254::G1Projective::default()).is_err());
+        let identity = ark_bn254::G1Affine::identity();
+        assert!(
+            Bn254PublicKey::try_from(identity).is_err(),
+            "identity point must be rejected"
+        );
 
-        let proj: ark_bn254::G1Projective = pk1.into();
+        let proj: ark_bn254::G1Projective = (&pk1).try_into()?;
         assert_eq!(Bn254PublicKey::try_from(proj)?, pk1);
+
+        // TryFrom<G1Affine>
+        let proj2: ark_bn254::G1Projective = (&pk1).try_into()?;
+        let affine: ark_bn254::G1Affine = proj2.into();
+        let pk_from_affine = Bn254PublicKey::try_from(affine)?;
+        assert_eq!(pk1, pk_from_affine, "from G1Affine failed");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bn254_public_key_rejects_invalid()
+    -> anyhow::Result<()> {
+        use ark_ff::PrimeField;
+
+        // Deserialization of invalid 32 bytes (identity point)
+        assert!(
+            Bn254PublicKey::try_from(&[0u8; 32][..]).is_err(),
+            "all-zero 32 bytes must be rejected (identity)"
+        );
+
+        // Wrong-length slices
+        assert!(
+            Bn254PublicKey::try_from(&[0u8; 31][..]).is_err(),
+            "31 bytes must be rejected"
+        );
+        assert!(
+            Bn254PublicKey::try_from(&[0u8; 33][..]).is_err(),
+            "33 bytes must be rejected"
+        );
+
+        // from_privkey: zero secret
+        assert!(
+            Bn254PublicKey::from_privkey(&[0u8; 32]).is_err(),
+            "zero secret must be rejected"
+        );
+
+        // from_privkey: secret equal to Fr::MODULUS
+        let modulus_bytes_le: Vec<u8> = ark_bn254::Fr::MODULUS
+            .0
+            .iter()
+            .flat_map(|limb| limb.to_le_bytes())
+            .collect();
+        let modulus_arr: [u8; 32] = modulus_bytes_le.try_into().unwrap();
+        assert!(
+            Bn254PublicKey::from_privkey(&modulus_arr).is_err(),
+            "secret equal to Fr::MODULUS must be rejected"
+        );
+
+        // Also reject modulus + 1
+        let mut over_modulus = modulus_arr;
+        for byte in &mut over_modulus {
+            let (sum, overflow) = byte.overflowing_add(1);
+            *byte = sum;
+            if !overflow {
+                break;
+            }
+        }
+        assert!(
+            Bn254PublicKey::from_privkey(&over_modulus).is_err(),
+            "secret > Fr::MODULUS must be rejected"
+        );
+
+        // from_privkey: wrong length
+        assert!(
+            Bn254PublicKey::from_privkey(&[0u8; 31]).is_err(),
+            "31-byte secret must be rejected"
+        );
+        assert!(
+            Bn254PublicKey::from_privkey(&[0u8; 33]).is_err(),
+            "33-byte secret must be rejected"
+        );
+
+        // Round-trip: TryFrom<&Bn254PublicKey> for G1Projective
+        let (_, pk) = Bn254Keypair::random().unzip();
+        let proj: ark_bn254::G1Projective = (&pk).try_into()?;
+        let _ = Bn254PublicKey::try_from(&proj)?;
 
         Ok(())
     }
