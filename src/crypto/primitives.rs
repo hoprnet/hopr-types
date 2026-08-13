@@ -12,6 +12,12 @@ pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
 use crate::crypto::prelude::{BjjPublicKey, PublicKey};
 use crate::primitive::prelude::{Address, GeneralError};
+/// BN254 curve, re-exported from the [`ark_bn254`] crate.
+pub use ark_bn254::{
+    Fr as Bn254Scalar, G1Affine as Bn254G1Affine, G1Projective as Bn254G1Projective,
+};
+/// Serialization traits, re-exported from the [`ark_serialize`] crate.
+pub use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 /// BabyJubJub elliptic curve, re-exported from the [`babyjubjub_ec`] crate.
 pub use babyjubjub_ec::{
     BabyJubJub, GroupRepr as BabyJubJubCompressedPoint, Scalar as BabyJubJubScalar,
