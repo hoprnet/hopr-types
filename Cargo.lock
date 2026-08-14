@@ -2763,7 +2763,7 @@ dependencies = [
 [[package]]
 name = "hopr-bindings"
 version = "4.14.0"
-source = "git+https://github.com/hoprnet/contracts?rev=0eea1981c67343e65ff4e5ecb0b81b9ddc201b14#0eea1981c67343e65ff4e5ecb0b81b9ddc201b14"
+source = "git+https://github.com/hoprnet/contracts?rev=ee2ab3ab6524a764de0c58543ba2c68d1f75ad9c#ee2ab3ab6524a764de0c58543ba2c68d1f75ad9c"
 dependencies = [
  "alloy",
  "anyhow",
