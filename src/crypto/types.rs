@@ -884,9 +884,10 @@ pub type PacketTag = [u8; PACKET_TAG_LENGTH];
 /// The `AsRef` implementation will always return the compressed representation.
 /// However, the `TryFrom` byte slice accepts any representation.
 #[derive(Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PublicKey(
     NonIdentity<AffinePoint>,
-    [u8; Self::SIZE_COMPRESSED],
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE_COMPRESSED],
     Address,
 );
 
