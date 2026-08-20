@@ -255,24 +255,41 @@ impl From<&Bn254Keypair> for Bn254PublicKey {
 
 /// Extension trait for keypairs that can be used as PIX deposit/withdrawal keys.
 ///
-/// This trait is automatically implemented for all keypairs, where the public key is convertible into [`PixDepositAddress`]
-/// and the secret key is sized so that it also fits the [`PixDepositSecret`].
-pub trait PixKeypairExt: Keypair<SecretLen = typenum::U32>
-where
-    <Self as Keypair>::Public: Into<PixDepositAddress>,
-{
+/// Implementations preserve the curve tag required to interpret the secret.
+pub trait PixKeypairExt: Keypair<SecretLen = typenum::U32> {
+    /// Reconstructs this keypair from a curve-compatible PIX secret.
+    fn from_pix_secret(secret: &PixDepositSecret) -> Result<Self, errors::CryptoError>;
+
     /// Consumes the instance and produces corresponding [`PixDepositSecret`] and [`PixDepositAddress`].
+    fn unzip_into_pix(self) -> (PixDepositSecret, PixDepositAddress);
+}
+
+impl PixKeypairExt for ChainKeypair {
+    fn from_pix_secret(secret: &PixDepositSecret) -> Result<Self, errors::CryptoError> {
+        match secret {
+            PixDepositSecret::Eth(secret) => Self::from_secret(secret.as_ref()),
+            PixDepositSecret::Bjj(_) => Err(InvalidInputValue("PIX secret uses BabyJubJub")),
+        }
+    }
+
     fn unzip_into_pix(self) -> (PixDepositSecret, PixDepositAddress) {
         let (secret, public) = self.unzip();
-        (secret.into(), public.into())
+        (PixDepositSecret::Eth(secret), public.into())
     }
 }
 
-impl<K> PixKeypairExt for K
-where
-    K: Keypair<SecretLen = typenum::U32>,
-    <K as Keypair>::Public: Into<PixDepositAddress>,
-{
+impl PixKeypairExt for BjjKeypair {
+    fn from_pix_secret(secret: &PixDepositSecret) -> Result<Self, errors::CryptoError> {
+        match secret {
+            PixDepositSecret::Bjj(secret) => Self::from_secret(secret.as_ref()),
+            PixDepositSecret::Eth(_) => Err(InvalidInputValue("PIX secret uses secp256k1")),
+        }
+    }
+
+    fn unzip_into_pix(self) -> (PixDepositSecret, PixDepositAddress) {
+        let (secret, public) = self.unzip();
+        (PixDepositSecret::Bjj(secret), public.into())
+    }
 }
 
 #[cfg(test)]
@@ -363,7 +380,7 @@ mod tests {
         assert_eq!(p1, p2);
 
         let (s1, p1) = kp_1.clone().unzip_into_pix();
-        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(s1.secret().ct_eq(kp_1.secret()).unwrap_u8(), 1);
         assert_eq!(p1, kp_1.public().clone().into());
     }
 
@@ -407,7 +424,7 @@ mod tests {
         assert_eq!(p1, p2);
 
         let (s1, p1) = kp_1.clone().unzip_into_pix();
-        assert_eq!(s1.0.ct_eq(&kp_1.secret()).unwrap_u8(), 1);
+        assert_eq!(s1.secret().ct_eq(kp_1.secret()).unwrap_u8(), 1);
         assert_eq!(p1, kp_1.public().clone().into());
     }
 

@@ -10,7 +10,10 @@ use crate::crypto::{
 /// AES with 128-bit key in counter-mode (with big-endian counter).
 pub type Aes128Ctr = ctr::Ctr64BE<aes::Aes128>;
 
-use crate::crypto::prelude::{BjjPublicKey, PublicKey};
+use crate::crypto::{
+    errors::CryptoError,
+    prelude::{BjjKeypair, BjjPublicKey, Keypair, PublicKey},
+};
 use crate::primitive::prelude::{Address, GeneralError};
 /// BN254 curve, re-exported from the [`ark_bn254`] crate.
 pub use ark_bn254::{
@@ -236,24 +239,109 @@ impl TryFrom<PixDepositAddress> for BjjPublicKey {
 
 /// A secret corresponding to a PIX deposit address.
 ///
-/// Usually the [`PixDepositAddress`] can be calculated from the secret.
+/// The curve tag is part of the secret so the same 32 bytes cannot accidentally
+/// be interpreted using a different key derivation profile. BabyJubJub scalars
+/// use the HOPR canonical big-endian representation; the Curvy adapter converts
+/// them explicitly at its little-endian SDK boundary. Ethereum scalars use the
+/// canonical secp256k1 big-endian representation.
 #[derive(Clone, Debug)]
-pub struct PixDepositSecret(pub SecretValue<typenum::U32>);
+pub enum PixDepositSecret {
+    /// Secret scalar for an Ethereum PIX deposit address.
+    Eth(SecretKey),
+    /// Secret scalar for a BabyJubJub PIX deposit address.
+    Bjj(SecretKey),
+}
 
-impl AsRef<SecretValue<typenum::U32>> for PixDepositSecret {
-    fn as_ref(&self) -> &SecretValue<typenum::U32> {
-        &self.0
+impl PixDepositSecret {
+    /// Constructs and validates an Ethereum PIX deposit secret.
+    pub fn ethereum(secret: SecretKey) -> Result<Self, CryptoError> {
+        PublicKey::from_privkey(secret.as_ref())?;
+        Ok(Self::Eth(secret))
+    }
+
+    /// Constructs and validates a canonical BabyJubJub PIX deposit secret.
+    pub fn baby_jubjub(secret: SecretKey) -> Result<Self, CryptoError> {
+        BjjPublicKey::from_privkey(secret.as_ref())?;
+        Ok(Self::Bjj(secret))
+    }
+
+    /// Returns the public PIX deposit address corresponding to this secret.
+    pub fn address(&self) -> Result<PixDepositAddress, CryptoError> {
+        match self {
+            Self::Eth(secret) => Ok(PublicKey::from_privkey(secret.as_ref())?
+                .to_address()
+                .into()),
+            Self::Bjj(secret) => Ok(BjjPublicKey::from_privkey(secret.as_ref())?.into()),
+        }
+    }
+
+    /// Returns the address representation accepted by this secret.
+    pub fn address_type(&self) -> PixDepositAddressDiscriminants {
+        match self {
+            Self::Eth(_) => PixDepositAddressDiscriminants::Eth,
+            Self::Bjj(_) => PixDepositAddressDiscriminants::Bjj,
+        }
+    }
+
+    /// Returns the canonical scalar bytes without removing the curve tag.
+    pub fn secret(&self) -> &SecretKey {
+        match self {
+            Self::Eth(secret) | Self::Bjj(secret) => secret,
+        }
     }
 }
 
-impl From<PixDepositSecret> for SecretValue<typenum::U32> {
-    fn from(value: PixDepositSecret) -> Self {
-        value.0
+impl TryFrom<&PixDepositSecret> for PixDepositAddress {
+    type Error = CryptoError;
+
+    fn try_from(value: &PixDepositSecret) -> Result<Self, Self::Error> {
+        value.address()
     }
 }
 
-impl From<SecretValue<typenum::U32>> for PixDepositSecret {
-    fn from(value: SecretValue<typenum::U32>) -> Self {
-        Self(value)
+/// Converts the validated BabyJubJub keypair reconstructed by the PIX protocol
+/// into the curve-tagged secret consumed by a deposit-pool implementation.
+impl From<&BjjKeypair> for PixDepositSecret {
+    fn from(value: &BjjKeypair) -> Self {
+        Self::Bjj(value.secret().clone())
+    }
+}
+
+#[cfg(test)]
+mod pix_tests {
+    use super::*;
+
+    #[test]
+    fn pix_secrets_are_curve_tagged_and_derive_their_addresses() -> anyhow::Result<()> {
+        let scalar = SecretKey::from([1_u8; 32]);
+        let bjj = PixDepositSecret::baby_jubjub(scalar.clone())?;
+        let eth = PixDepositSecret::ethereum(scalar)?;
+
+        assert_eq!(bjj.address_type(), PixDepositAddressDiscriminants::Bjj);
+        assert!(matches!(bjj.address()?, PixDepositAddress::Bjj(_)));
+        assert_eq!(eth.address_type(), PixDepositAddressDiscriminants::Eth);
+        assert!(matches!(eth.address()?, PixDepositAddress::Eth(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn pix_secret_constructors_reject_invalid_scalars() {
+        let zero = SecretKey::from([0_u8; 32]);
+
+        assert!(PixDepositSecret::baby_jubjub(zero.clone()).is_err());
+        assert!(PixDepositSecret::ethereum(zero).is_err());
+    }
+
+    #[test]
+    fn reconstructed_bjj_keypair_becomes_a_tagged_pix_secret() -> anyhow::Result<()> {
+        let reconstructed = BjjKeypair::random();
+        let secret = PixDepositSecret::from(&reconstructed);
+
+        assert_eq!(
+            secret.address()?,
+            PixDepositAddress::from(*reconstructed.public())
+        );
+        assert_eq!(secret.address_type(), PixDepositAddressDiscriminants::Bjj);
+        Ok(())
     }
 }
