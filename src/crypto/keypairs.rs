@@ -227,11 +227,7 @@ impl Bn254Keypair {
     /// [`Keypair::secret`] and [`Keypair::from_secret`] remain symmetric.
     /// Use [`secret_be`](Bn254Keypair::secret_be) to retrieve it as a big-endian integer.
     pub fn from_secret_be(bytes: &[u8]) -> errors::Result<Self> {
-        // Keep the secret material in a zeroizing container while it is being reversed.
-        let mut little_endian = SecretValue::<typenum::U32>::try_from(bytes)?;
-        little_endian.as_mut().reverse();
-
-        Self::from_secret(little_endian.as_ref())
+        Self::from_secret(crate::crypto::utils::reverse_secret_scalar(bytes)?.as_ref())
     }
 
     /// Returns the secret scalar as a big-endian integer.
@@ -239,10 +235,8 @@ impl Bn254Keypair {
     /// This is the counterpart of [`from_secret_be`](Bn254Keypair::from_secret_be);
     /// [`Keypair::secret`] returns the little-endian representation.
     pub fn secret_be(&self) -> SecretValue<typenum::U32> {
-        let mut ret = SecretValue::<typenum::U32>::default();
-        ret.as_mut().copy_from_slice(self.0.as_ref());
-        ret.as_mut().reverse();
-        ret
+        crate::crypto::utils::reverse_secret_scalar(self.0.as_ref())
+            .expect("the secret always has the correct length")
     }
 }
 

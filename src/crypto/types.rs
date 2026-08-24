@@ -33,7 +33,7 @@ use crate::crypto::{
         CryptoError::{self, CalculationError, InvalidInputValue},
         Result,
     },
-    utils::{SecretValue, random_group_element},
+    utils::{random_group_element, reverse_secret_scalar},
 };
 
 pub(crate) fn affine_point_from_bytes(bytes: &[u8]) -> Result<AffinePoint> {
@@ -745,6 +745,16 @@ fn bn254_decompress(bytes: &[u8; Bn254PublicKey::SIZE]) -> Option<ark_bn254::G1A
 /// significant bits of a canonical `x` are always clear and one of them can carry the sign.
 ///
 /// The point at infinity has no representation, since it is never a valid public key.
+///
+/// <div class="warning">
+///
+/// This is not the canonical [`ark_bn254`] compressed serialization, which is little-endian
+/// and carries its flags in the most significant bits of the last byte. Byte representations
+/// of this type produced by versions up to 2.3.0 used that serialization and cannot be
+/// decoded here: the two encodings have the same length and no discriminator, so a value in
+/// the old encoding either fails to parse or silently denotes a different point.
+///
+/// </div>
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Bn254PublicKey(
@@ -804,10 +814,8 @@ impl Bn254PublicKey {
     ///
     /// The same inputs are rejected as by [`from_privkey`](Bn254PublicKey::from_privkey).
     pub fn from_privkey_be(secret: &[u8]) -> Result<Self> {
-        // Keep the secret material in a zeroizing container while it is being reversed.
-        let mut little_endian = SecretValue::<typenum::U32>::try_from(secret)
-            .map_err(|_| CryptoError::InvalidSecretScalar)?;
-        little_endian.as_mut().reverse();
+        let little_endian =
+            reverse_secret_scalar(secret).map_err(|_| CryptoError::InvalidSecretScalar)?;
 
         Self::from_privkey(little_endian.as_ref())
     }

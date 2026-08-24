@@ -268,10 +268,23 @@ impl From<SecretValue<typenum::U32>> for PixDepositSecret {
 /// The representation is the session identifier followed by the big-endian SSA index,
 /// which makes it usable as a stable database key. The SSA index is never zero.
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PixAddressId(
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
 );
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PixAddressId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Must not be derived: the deserialized bytes have to be validated,
+        // otherwise a zero SSA index could be constructed.
+        let bytes = <serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer)?;
+        Self::try_from(bytes.as_ref()).map_err(serde::de::Error::custom)
+    }
+}
 
 impl PixAddressId {
     /// Creates a PIX allocation identifier.
@@ -423,6 +436,26 @@ mod pix_address_id_tests {
         let encoded = serde_json::to_vec(&id)?;
         assert_eq!(serde_json::from_slice::<PixAddressId>(&encoded)?, id);
         assert_eq!(serde_json::from_slice::<Vec<u8>>(&encoded)?, id.as_ref());
+
+        Ok(())
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pix_address_id_deserialization_must_validate_its_input() -> anyhow::Result<()> {
+        // Deserialization must not be able to construct a zero SSA index,
+        // which would make `ssa_index` panic.
+        let mut bytes = [0u8; PixAddressId::SIZE];
+        bytes[..SimplePseudonym::SIZE].copy_from_slice(AsRef::<[u8]>::as_ref(
+            &SimplePseudonym::from([7u8; SimplePseudonym::SIZE]),
+        ));
+
+        let encoded = serde_json::to_vec(&bytes.to_vec())?;
+        assert!(serde_json::from_slice::<PixAddressId>(&encoded).is_err());
+
+        // Neither must a wrong length
+        let encoded = serde_json::to_vec(&bytes[..PixAddressId::SIZE - 1].to_vec())?;
+        assert!(serde_json::from_slice::<PixAddressId>(&encoded).is_err());
 
         Ok(())
     }
