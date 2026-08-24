@@ -1,6 +1,7 @@
 //! This Rust crate contains implementation of common cryptographic types.
 
 /// Types of the Curvy PIX integration.
+#[cfg(feature = "curvy")]
 pub mod curvy;
 /// Contains error enum implementation used across other crypto modules
 pub mod errors;
@@ -54,7 +55,10 @@ pub mod prelude {
     pub use libp2p_identity::PeerId;
 
     pub use super::{
-        crypto_traits, curvy::*, errors::CryptoError, keypairs::*, primitives::*, seal::*,
-        signing::*, types::*, utils::*, vrf::*,
+        crypto_traits, errors::CryptoError, keypairs::*, primitives::*, seal::*, signing::*,
+        types::*, utils::*, vrf::*,
     };
+
+    #[cfg(feature = "curvy")]
+    pub use super::curvy::*;
 }
