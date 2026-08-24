@@ -33,7 +33,7 @@ use crate::crypto::{
         CryptoError::{self, CalculationError, InvalidInputValue},
         Result,
     },
-    utils::random_group_element,
+    utils::{SecretValue, random_group_element},
 };
 
 pub(crate) fn affine_point_from_bytes(bytes: &[u8]) -> Result<AffinePoint> {
@@ -695,7 +695,56 @@ impl TryFrom<babyjubjub_ec::AffinePoint> for BjjPublicKey {
     }
 }
 
+/// Curve coefficient `b` of the BN254 G1 curve: `y^2 = x^3 + 3`.
+const BN254_G1_B: u64 = 3;
+
+/// Sign (parity) bit of `y`, stored in the most significant bit of the compressed `x`.
+const BN254_Y_SIGN_BIT: u8 = 0x80;
+
+/// Parses a canonical big-endian BN254 base field element,
+/// rejecting anything that is not fully reduced.
+fn bn254_canonical_fq(bytes: &[u8; Bn254PublicKey::SIZE]) -> Option<ark_bn254::Fq> {
+    use ark_ff::{BigInteger, PrimeField};
+
+    let element = ark_bn254::Fq::from_be_bytes_mod_order(bytes);
+    (element.into_bigint().to_bytes_be() == bytes).then_some(element)
+}
+
+/// Recovers the affine point from the [`Bn254PublicKey`] representation.
+///
+/// See [`Bn254PublicKey`] for the description of the encoding.
+fn bn254_decompress(bytes: &[u8; Bn254PublicKey::SIZE]) -> Option<ark_bn254::G1Affine> {
+    use ark_ff::{BigInteger, Field, PrimeField};
+
+    let y_is_odd = bytes[0] & BN254_Y_SIGN_BIT != 0;
+
+    let mut x_bytes = *bytes;
+    x_bytes[0] &= !BN254_Y_SIGN_BIT;
+    let x = bn254_canonical_fq(&x_bytes)?;
+
+    // Both roots differ in parity, because the field modulus is odd,
+    // so the sign bit selects one of them unambiguously.
+    let root = (x.square() * x + ark_bn254::Fq::from(BN254_G1_B)).sqrt()?;
+    let y = if root.into_bigint().is_odd() == y_is_odd {
+        root
+    } else {
+        -root
+    };
+
+    // `y` was derived from the curve equation, therefore the point is always on the curve.
+    // BN254 G1 has cofactor 1, so it is also always in the prime-order subgroup.
+    // The point at infinity has no representation in this encoding.
+    Some(ark_bn254::G1Affine::new_unchecked(x, y))
+}
+
 /// Implements a public key for the BN254 curve (also known as alt-BN128).
+///
+/// The 32-byte representation is the point-compressed form of the affine coordinates:
+/// the big-endian `x` coordinate carrying the sign (parity) of `y` in its most
+/// significant bit. The BN254 base field modulus is a 254-bit number, so the two most
+/// significant bits of a canonical `x` are always clear and one of them can carry the sign.
+///
+/// The point at infinity has no representation, since it is never a valid public key.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Bn254PublicKey(
@@ -721,9 +770,8 @@ impl Bn254PublicKey {
     /// - the scalar is zero, or
     /// - the scalar is greater than or equal to the BN254 Fr field modulus.
     pub fn from_privkey(secret: &[u8]) -> Result<Self> {
-        use ark_ec::{AffineRepr, PrimeGroup};
+        use ark_ec::PrimeGroup;
         use ark_ff::{BigInt, PrimeField};
-        use ark_serialize::CanonicalSerialize;
 
         let bytes: [u8; 32] = secret
             .try_into()
@@ -743,18 +791,61 @@ impl Bn254PublicKey {
 
         let scalar = ark_bn254::Fr::from_le_bytes_mod_order(&bytes);
         let point = ark_bn254::G1Projective::generator() * scalar;
-        let affine = ark_bn254::G1Affine::from(point);
 
-        if affine.is_zero() {
-            return Err(CryptoError::InvalidSecretScalar);
+        // The only possible failure here is the zero scalar yielding the point at infinity.
+        Self::try_from(&point).map_err(|_| CryptoError::InvalidSecretScalar)
+    }
+
+    /// Derives a [`Bn254PublicKey`] from a big-endian 32-byte secret scalar.
+    ///
+    /// This is the counterpart of [`from_privkey`](Bn254PublicKey::from_privkey) for
+    /// secret scalars encoded as big-endian integers, which is the representation used
+    /// by the [`Bn254PublicKey`] public key encoding and by other big-endian BN254 tooling.
+    ///
+    /// The same inputs are rejected as by [`from_privkey`](Bn254PublicKey::from_privkey).
+    pub fn from_privkey_be(secret: &[u8]) -> Result<Self> {
+        // Keep the secret material in a zeroizing container while it is being reversed.
+        let mut little_endian = SecretValue::<typenum::U32>::try_from(secret)
+            .map_err(|_| CryptoError::InvalidSecretScalar)?;
+        little_endian.as_mut().reverse();
+
+        Self::from_privkey(little_endian.as_ref())
+    }
+
+    /// Creates a [`Bn254PublicKey`] from the affine coordinates of a BN254 G1 point.
+    ///
+    /// Both coordinates must be canonical big-endian base field elements of a point
+    /// lying on the curve, otherwise [`CryptoError::InvalidPublicKey`] is returned.
+    pub fn from_affine_coordinates(x: &[u8; Self::SIZE], y: &[u8; Self::SIZE]) -> Result<Self> {
+        let x = bn254_canonical_fq(x).ok_or(CryptoError::InvalidPublicKey)?;
+        let y = bn254_canonical_fq(y).ok_or(CryptoError::InvalidPublicKey)?;
+
+        // BN254 G1 has a prime order, so being on the curve already implies the membership
+        // of the prime-order subgroup and no cofactor clearing check is needed.
+        let point = ark_bn254::G1Affine::new_unchecked(x, y);
+        if !point.is_on_curve() {
+            return Err(CryptoError::InvalidPublicKey);
         }
 
-        let mut buf = [0u8; Self::SIZE];
-        affine
-            .serialize_compressed(&mut buf[..])
-            .map_err(|_| CryptoError::InvalidPublicKey)?;
+        Self::try_from(&point)
+    }
 
-        Ok(Self(buf))
+    /// Returns the affine coordinates `(x, y)` of this point as canonical
+    /// big-endian base field elements.
+    pub fn to_affine_coordinates(&self) -> ([u8; Self::SIZE], [u8; Self::SIZE]) {
+        use ark_ec::AffineRepr;
+        use ark_ff::{BigInteger, PrimeField};
+
+        let (x, y) = bn254_decompress(&self.0)
+            .and_then(|point| point.xy())
+            .expect("Bn254PublicKey is always a valid curve point");
+
+        let mut x_bytes = [0u8; Self::SIZE];
+        let mut y_bytes = [0u8; Self::SIZE];
+        x_bytes.copy_from_slice(&x.into_bigint().to_bytes_be());
+        y_bytes.copy_from_slice(&y.into_bigint().to_bytes_be());
+
+        (x_bytes, y_bytes)
     }
 }
 
@@ -780,24 +871,14 @@ impl AsRef<[u8]> for Bn254PublicKey {
 impl<'a> TryFrom<&'a [u8]> for Bn254PublicKey {
     type Error = GeneralError;
     fn try_from(value: &'a [u8]) -> result::Result<Self, Self::Error> {
-        if value.len() != Self::SIZE {
-            return Err(ParseError("Bn254PublicKey".into()));
-        }
-
-        let repr_bytes: [u8; 32] = value
+        let repr_bytes: [u8; Self::SIZE] = value
             .try_into()
             .map_err(|_| ParseError("Bn254PublicKey".into()))?;
 
-        use ark_ec::AffineRepr;
-        use ark_serialize::CanonicalDeserialize;
-
-        let affine = ark_bn254::G1Affine::deserialize_compressed(&repr_bytes[..])
-            .map_err(|_| ParseError("Bn254PublicKey".into()))?;
-
-        if affine.is_zero() {
+        // Decompression validates that the representation is canonical and denotes a curve point.
+        if bn254_decompress(&repr_bytes).is_none() {
             return Err(ParseError("Bn254PublicKey".into()));
         }
-        // BN254 has cofactor=1 for G1, so any valid curve point is in the prime-order subgroup.
 
         Ok(Self(repr_bytes))
     }
@@ -811,20 +892,7 @@ impl TryFrom<&ark_bn254::G1Projective> for Bn254PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &ark_bn254::G1Projective) -> result::Result<Self, Self::Error> {
-        use ark_ec::AffineRepr;
-        use ark_serialize::CanonicalSerialize;
-
-        let affine = ark_bn254::G1Affine::from(*value);
-        if affine.is_zero() {
-            return Err(CryptoError::InvalidPublicKey);
-        }
-
-        let mut buf = [0u8; Self::SIZE];
-        affine
-            .serialize_compressed(&mut buf[..])
-            .map_err(|_| CryptoError::InvalidPublicKey)?;
-
-        Ok(Self(buf))
+        Self::try_from(&ark_bn254::G1Affine::from(*value))
     }
 }
 
@@ -840,11 +908,9 @@ impl TryFrom<&Bn254PublicKey> for ark_bn254::G1Projective {
     type Error = CryptoError;
 
     fn try_from(value: &Bn254PublicKey) -> result::Result<ark_bn254::G1Projective, Self::Error> {
-        use ark_serialize::CanonicalDeserialize;
-
-        let affine = ark_bn254::G1Affine::deserialize_compressed(&value.0[..])
-            .map_err(|_| CryptoError::InvalidPublicKey)?;
-        Ok(affine.into())
+        bn254_decompress(&value.0)
+            .map(Into::into)
+            .ok_or(CryptoError::InvalidPublicKey)
     }
 }
 
@@ -860,7 +926,19 @@ impl TryFrom<&ark_bn254::G1Affine> for Bn254PublicKey {
     type Error = CryptoError;
 
     fn try_from(value: &ark_bn254::G1Affine) -> result::Result<Self, Self::Error> {
-        (ark_bn254::G1Projective::from(*value)).try_into()
+        use ark_ec::AffineRepr;
+        use ark_ff::{BigInteger, PrimeField};
+
+        // Yields `None` for the point at infinity, which is never a valid public key.
+        let (x, y) = value.xy().ok_or(CryptoError::InvalidPublicKey)?;
+
+        let mut ret = [0u8; Self::SIZE];
+        ret.copy_from_slice(&x.into_bigint().to_bytes_be());
+        if y.into_bigint().is_odd() {
+            ret[0] |= BN254_Y_SIGN_BIT;
+        }
+
+        Ok(Self(ret))
     }
 }
 
@@ -1495,13 +1573,166 @@ mod tests {
     }
 
     #[test]
+    fn test_bn254_public_key_representation() -> anyhow::Result<()> {
+        use ark_ec::AffineRepr;
+        use ark_ff::{BigInteger, PrimeField};
+
+        let generator = ark_bn254::G1Affine::generator();
+        let pk = Bn254PublicKey::try_from(generator)?;
+
+        // The representation is the big-endian x with the parity of y in the MSB
+        let (x, y) = generator.xy().expect("generator is not at infinity");
+        let mut expected: [u8; Bn254PublicKey::SIZE] = x
+            .into_bigint()
+            .to_bytes_be()
+            .try_into()
+            .expect("x must be 32 bytes");
+        if y.into_bigint().is_odd() {
+            expected[0] |= 0x80;
+        }
+        assert_eq!(pk.as_ref(), expected.as_slice());
+
+        // Both roots of x must be distinguishable and must decompress back
+        let negated = Bn254PublicKey::try_from(-generator)?;
+        assert_ne!(pk, negated);
+        assert_eq!(
+            pk.as_ref()[0] ^ negated.as_ref()[0],
+            0x80,
+            "only the sign bit must differ"
+        );
+        assert_eq!(pk.as_ref()[1..], negated.as_ref()[1..]);
+
+        let decompressed: ark_bn254::G1Projective = (&pk).try_into()?;
+        assert_eq!(ark_bn254::G1Affine::from(decompressed), generator);
+
+        let decompressed: ark_bn254::G1Projective = (&negated).try_into()?;
+        assert_eq!(ark_bn254::G1Affine::from(decompressed), -generator);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bn254_public_key_affine_coordinates() -> anyhow::Result<()> {
+        let public = *Bn254Keypair::random().public();
+
+        let (x, y) = public.to_affine_coordinates();
+        assert_eq!(Bn254PublicKey::from_affine_coordinates(&x, &y)?, public);
+
+        // The sign of y must be preserved
+        let (neg_x, neg_y) = Bn254PublicKey::try_from(
+            -ark_bn254::G1Projective::try_from(&public).map_err(anyhow::Error::msg)?,
+        )?
+        .to_affine_coordinates();
+        assert_eq!(x, neg_x);
+        assert_ne!(y, neg_y);
+        assert_ne!(
+            Bn254PublicKey::from_affine_coordinates(&x, &neg_y)?,
+            public,
+            "both roots of x must be distinguishable"
+        );
+
+        // Swapping the coordinates takes the point off the curve
+        assert!(Bn254PublicKey::from_affine_coordinates(&y, &x).is_err());
+
+        // Non-canonical coordinates are rejected
+        use ark_ff::{BigInteger, PrimeField};
+        let modulus: [u8; Bn254PublicKey::SIZE] = ark_bn254::Fq::MODULUS
+            .to_bytes_be()
+            .try_into()
+            .expect("modulus must be 32 bytes");
+        assert!(Bn254PublicKey::from_affine_coordinates(&modulus, &y).is_err());
+        assert!(Bn254PublicKey::from_affine_coordinates(&x, &modulus).is_err());
+
+        // The point at infinity has no affine coordinates
+        assert!(
+            Bn254PublicKey::from_affine_coordinates(
+                &[0u8; Bn254PublicKey::SIZE],
+                &[0u8; Bn254PublicKey::SIZE]
+            )
+            .is_err()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bn254_public_key_rejects_invalid_representations() -> anyhow::Result<()> {
+        use ark_ff::{BigInteger, PrimeField};
+
+        // x equal to the base field modulus is not a canonical field element
+        let modulus: [u8; Bn254PublicKey::SIZE] = ark_bn254::Fq::MODULUS
+            .to_bytes_be()
+            .try_into()
+            .expect("modulus must be 32 bytes");
+        assert!(
+            Bn254PublicKey::try_from(&modulus[..]).is_err(),
+            "non-canonical x must be rejected"
+        );
+
+        // x = 4 is not on the curve, because 4^3 + 3 is not a quadratic residue
+        let mut not_on_curve = [0u8; Bn254PublicKey::SIZE];
+        not_on_curve[Bn254PublicKey::SIZE - 1] = 4;
+        assert!(
+            Bn254PublicKey::try_from(&not_on_curve[..]).is_err(),
+            "x that is not on the curve must be rejected"
+        );
+
+        // ...regardless of the sign bit
+        not_on_curve[0] |= 0x80;
+        assert!(
+            Bn254PublicKey::try_from(&not_on_curve[..]).is_err(),
+            "x that is not on the curve must be rejected"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bn254_public_key_from_privkey_be() -> anyhow::Result<()> {
+        use ark_ec::AffineRepr;
+        use ark_ff::{BigInteger, PrimeField};
+
+        // The scalar 1 must yield the generator
+        let mut one = [0u8; 32];
+        one[31] = 1;
+        assert_eq!(
+            Bn254PublicKey::from_privkey_be(&one)?,
+            Bn254PublicKey::try_from(ark_bn254::G1Affine::generator())?,
+            "big-endian scalar 1 must yield the generator"
+        );
+
+        // Must agree with from_privkey on the reversed representation
+        let (secret, public) = Bn254Keypair::random().unzip();
+        let mut big_endian: [u8; 32] = secret.as_ref().try_into()?;
+        big_endian.reverse();
+        assert_eq!(Bn254PublicKey::from_privkey_be(&big_endian)?, public);
+
+        // Must reject the same inputs as from_privkey
+        assert!(Bn254PublicKey::from_privkey_be(&[0u8; 32]).is_err());
+        assert!(Bn254PublicKey::from_privkey_be(&[0u8; 31]).is_err());
+        assert!(Bn254PublicKey::from_privkey_be(&[0u8; 33]).is_err());
+
+        let modulus: [u8; 32] = ark_bn254::Fr::MODULUS
+            .to_bytes_be()
+            .try_into()
+            .expect("modulus must be 32 bytes");
+        assert!(
+            Bn254PublicKey::from_privkey_be(&modulus).is_err(),
+            "secret equal to Fr::MODULUS must be rejected"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_bn254_public_key_rejects_invalid() -> anyhow::Result<()> {
         use ark_ff::PrimeField;
 
-        // Deserialization of invalid 32 bytes (identity point)
+        // There is no curve point with x = 0, because the curve coefficient b = 3
+        // is not a quadratic residue
         assert!(
             Bn254PublicKey::try_from(&[0u8; 32][..]).is_err(),
-            "all-zero 32 bytes must be rejected (identity)"
+            "all-zero 32 bytes must be rejected"
         );
 
         // Wrong-length slices

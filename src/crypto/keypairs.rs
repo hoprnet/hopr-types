@@ -216,6 +216,36 @@ impl From<&BjjKeypair> for BjjPublicKey {
 #[derive(Clone, Debug)]
 pub struct Bn254Keypair(SecretValue<typenum::U32>, Bn254PublicKey);
 
+impl Bn254Keypair {
+    /// Creates a keypair from the given big-endian secret scalar.
+    ///
+    /// [`Keypair::from_secret`] expects the little-endian representation used by the
+    /// BN254 arithmetic backend. This is its counterpart for secret scalars encoded as
+    /// big-endian integers, see [`Bn254PublicKey::from_privkey_be`].
+    ///
+    /// The secret is always stored in the little-endian representation, so that
+    /// [`Keypair::secret`] and [`Keypair::from_secret`] remain symmetric.
+    /// Use [`secret_be`](Bn254Keypair::secret_be) to retrieve it as a big-endian integer.
+    pub fn from_secret_be(bytes: &[u8]) -> errors::Result<Self> {
+        // Keep the secret material in a zeroizing container while it is being reversed.
+        let mut little_endian = SecretValue::<typenum::U32>::try_from(bytes)?;
+        little_endian.as_mut().reverse();
+
+        Self::from_secret(little_endian.as_ref())
+    }
+
+    /// Returns the secret scalar as a big-endian integer.
+    ///
+    /// This is the counterpart of [`from_secret_be`](Bn254Keypair::from_secret_be);
+    /// [`Keypair::secret`] returns the little-endian representation.
+    pub fn secret_be(&self) -> SecretValue<typenum::U32> {
+        let mut ret = SecretValue::<typenum::U32>::default();
+        ret.as_mut().copy_from_slice(self.0.as_ref());
+        ret.as_mut().reverse();
+        ret
+    }
+}
+
 impl Keypair for Bn254Keypair {
     type Public = Bn254PublicKey;
     type SecretLen = typenum::U32;
@@ -449,5 +479,37 @@ mod tests {
 
         assert_eq!(s1.ct_eq(&s2).unwrap_u8(), 1);
         assert_eq!(p1, p2);
+    }
+
+    #[test]
+    fn test_bn254_keypair_big_endian_secret() -> anyhow::Result<()> {
+        let kp_1 = Bn254Keypair::random();
+
+        let mut reversed = kp_1.secret().as_ref().to_vec();
+        reversed.reverse();
+        assert_eq!(
+            kp_1.secret_be().as_ref(),
+            reversed.as_slice(),
+            "big-endian secret must be the reverse of the little-endian one"
+        );
+
+        let kp_2 = Bn254Keypair::from_secret_be(kp_1.secret_be().as_ref())?;
+        assert_eq!(
+            kp_1.ct_eq(&kp_2).unwrap_u8(),
+            1,
+            "keypairs must round-trip through the big-endian secret"
+        );
+        assert_eq!(kp_1.public(), kp_2.public());
+
+        assert_eq!(
+            &Bn254PublicKey::from_privkey_be(kp_1.secret_be().as_ref())?,
+            kp_1.public(),
+            "must be consistent with Bn254PublicKey::from_privkey_be"
+        );
+
+        assert!(Bn254Keypair::from_secret_be(&[0u8; 32]).is_err());
+        assert!(Bn254Keypair::from_secret_be(&[0u8; 31]).is_err());
+
+        Ok(())
     }
 }
