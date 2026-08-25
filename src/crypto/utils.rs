@@ -98,6 +98,18 @@ pub fn sample_secp256k1_field_element(
     }
 }
 
+/// Reverses the endianness of a 32-byte secret scalar.
+///
+/// The material is kept inside a zeroizing container, so that the intermediate
+/// representation cannot be left behind on the stack.
+pub(crate) fn reverse_secret_scalar(
+    bytes: &[u8],
+) -> crate::crypto::errors::Result<SecretValue<typenum::U32>> {
+    let mut ret = SecretValue::<typenum::U32>::try_from(bytes)?;
+    ret.as_mut().reverse();
+    Ok(ret)
+}
+
 /// Represents a secret value of a fixed length that is zeroized on drop.
 /// Secret values are always compared in constant time.
 /// The default value is all zeroes.
