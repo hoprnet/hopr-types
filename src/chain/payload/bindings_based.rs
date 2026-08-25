@@ -34,6 +34,9 @@ use hopr_bindings::{
     hopr_node_safe_registry::HoprNodeSafeRegistry::{
         deregisterNodeBySafeCall, registerSafeByNodeCall,
     },
+    hopr_service_registry::HoprServiceRegistry::{
+        selfDeregisterCall, selfRegisterCall, selfUpdateCall,
+    },
     hopr_token::HoprToken::{approveCall, sendCall, transferCall},
 };
 
@@ -82,8 +85,15 @@ sol! (
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Operation {
     Call = 0,
-    // Future use: DelegateCall = 1,
+    DelegateCall = 1,
 }
+
+sol! {
+    function multiSend(bytes transactions);
+}
+
+const SAFE_MULTI_SEND_ADDRESS: alloy::primitives::Address =
+    alloy::primitives::address!("38869bf66a61cF6bDB996A6aE40D5853Fd43B526");
 
 #[async_trait::async_trait]
 impl SignableTransaction for TransactionRequest {
@@ -157,6 +167,75 @@ fn register_safe_tx(safe_addr: Address) -> TransactionRequest {
         }
         .abi_encode(),
     )
+}
+
+fn encode_multi_send_transaction(to: alloy::primitives::Address, data: &[u8]) -> Vec<u8> {
+    let mut encoded = Vec::with_capacity(85 + data.len());
+    encoded.push(Operation::Call as u8);
+    encoded.extend_from_slice(to.as_slice());
+    encoded.extend_from_slice(&[0u8; 32]);
+    encoded.extend_from_slice(&U256::from(data.len()).to_be_bytes::<32>());
+    encoded.extend_from_slice(data);
+    encoded
+}
+
+fn service_registry_call(
+    service_type: ServiceType,
+    node: Address,
+    metadata: Option<&ServiceMetadata>,
+    update: bool,
+) -> Vec<u8> {
+    let service_type = B256::from(service_type.as_encoded());
+    let node = a2al(node);
+    match metadata {
+        Some(metadata) if update => selfUpdateCall {
+            serviceType: service_type,
+            node,
+            metadata: metadata.as_ref().to_vec().into(),
+        }
+        .abi_encode(),
+        Some(metadata) => selfRegisterCall {
+            serviceType: service_type,
+            node,
+            metadata: metadata.as_ref().to_vec().into(),
+        }
+        .abi_encode(),
+        None => selfDeregisterCall {
+            serviceType: service_type,
+            node,
+        }
+        .abi_encode(),
+    }
+}
+
+fn paid_service_registry_payload(
+    token: alloy::primitives::Address,
+    registry: alloy::primitives::Address,
+    registry_call: &[u8],
+    burn: HoprBalance,
+) -> Vec<u8> {
+    let mut transactions = Vec::new();
+    if !burn.is_zero() {
+        let approval = approveCall {
+            spender: registry,
+            value: U256::from_be_bytes(burn.amount().to_be_bytes()),
+        }
+        .abi_encode();
+        transactions.extend_from_slice(&encode_multi_send_transaction(token, &approval));
+    }
+    transactions.extend_from_slice(&encode_multi_send_transaction(registry, registry_call));
+
+    let multi_send = multiSendCall {
+        transactions: transactions.into(),
+    }
+    .abi_encode();
+    execTransactionFromModuleCall {
+        to: SAFE_MULTI_SEND_ADDRESS,
+        value: U256::ZERO,
+        data: multi_send.into(),
+        operation: Operation::DelegateCall as u8,
+    }
+    .abi_encode()
 }
 
 /// Generates transaction payloads that do not use Safe-compliant ABI
@@ -333,6 +412,54 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Err(InvalidState(
             "Can only deregister an address if Safe is activated",
         ))
+    }
+
+    fn register_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        registration_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        if !registration_burn.is_zero() {
+            return Err(InvalidState(
+                "paid service writes require a Safe payload generator",
+            ));
+        }
+        Ok(TransactionRequest::default()
+            .with_input(service_registry_call(
+                service_type,
+                self.me,
+                Some(&metadata),
+                false,
+            ))
+            .with_to(self.contract_addrs.service_registry))
+    }
+
+    fn update_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        update_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        if !update_burn.is_zero() {
+            return Err(InvalidState(
+                "paid service writes require a Safe payload generator",
+            ));
+        }
+        Ok(TransactionRequest::default()
+            .with_input(service_registry_call(
+                service_type,
+                self.me,
+                Some(&metadata),
+                true,
+            ))
+            .with_to(self.contract_addrs.service_registry))
+    }
+
+    fn deregister_service(&self, service_type: ServiceType) -> payload::Result<Self::TxRequest> {
+        Ok(TransactionRequest::default()
+            .with_input(service_registry_call(service_type, self.me, None, false))
+            .with_to(self.contract_addrs.service_registry))
     }
 
     fn deploy_safe(
@@ -626,6 +753,58 @@ impl PayloadGenerator for SafePayloadGenerator {
             .with_gas_limit(DEFAULT_TX_GAS);
 
         Ok(tx)
+    }
+
+    fn register_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        registration_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        let call = service_registry_call(service_type, self.me, Some(&metadata), false);
+        Ok(TransactionRequest::default()
+            .with_input(paid_service_registry_payload(
+                self.contract_addrs.token,
+                self.contract_addrs.service_registry,
+                &call,
+                registration_burn,
+            ))
+            .with_to(a2al(self.module))
+            .with_gas_limit(DEFAULT_TX_GAS))
+    }
+
+    fn update_service(
+        &self,
+        service_type: ServiceType,
+        metadata: ServiceMetadata,
+        update_burn: HoprBalance,
+    ) -> payload::Result<Self::TxRequest> {
+        let call = service_registry_call(service_type, self.me, Some(&metadata), true);
+        Ok(TransactionRequest::default()
+            .with_input(paid_service_registry_payload(
+                self.contract_addrs.token,
+                self.contract_addrs.service_registry,
+                &call,
+                update_burn,
+            ))
+            .with_to(a2al(self.module))
+            .with_gas_limit(DEFAULT_TX_GAS))
+    }
+
+    fn deregister_service(&self, service_type: ServiceType) -> payload::Result<Self::TxRequest> {
+        let call = service_registry_call(service_type, self.me, None, false);
+        Ok(TransactionRequest::default()
+            .with_input(
+                execTransactionFromModuleCall {
+                    to: self.contract_addrs.service_registry,
+                    value: U256::ZERO,
+                    data: call.into(),
+                    operation: Operation::Call as u8,
+                }
+                .abi_encode(),
+            )
+            .with_to(a2al(self.module))
+            .with_gas_limit(DEFAULT_TX_GAS))
     }
 
     fn deploy_safe(

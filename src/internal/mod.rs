@@ -26,6 +26,8 @@ pub mod path;
 pub mod protocol;
 /// Implements types for packet routing.
 pub mod routing;
+/// Implements types for the on-chain registry of services offered by HOPR nodes.
+pub mod service;
 /// Implements types for tickets.
 pub mod tickets;
 
@@ -94,7 +96,7 @@ pub use multiaddr::Multiaddr;
 pub mod prelude {
     pub use super::{
         Multiaddr, NodeId, account::*, announcement::*, channels::*, errors::CoreTypesError,
-        path::*, protocol::*, routing::*, tickets::*,
+        path::*, protocol::*, routing::*, service::*, tickets::*,
     };
 }
 
