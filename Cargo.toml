@@ -1,6 +1,6 @@
 [package]
 name = "hopr-types"
-version = "2.4.0"
+version = "3.0.0"
 description = "Complete collection of Rust types used in Hoprnet and other related projects"
 authors = ["HOPR Association <tech@hoprnet.org>"]
 homepage = "https://hoprnet.org/"
@@ -26,6 +26,7 @@ all-types = [
   "primitive",
   "random",
   "telemetry",
+  "curvy",
 ]
 
 primitive = [
@@ -71,6 +72,7 @@ crypto = [
   "dep:zeroize",
   "hybrid-array/zeroize",
 ]
+curvy = []
 internal = [
   "crypto",
   "dep:aquamarine",
