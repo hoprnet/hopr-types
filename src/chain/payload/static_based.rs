@@ -162,8 +162,13 @@ fn encode_deregister_node_by_safe(node_addr: [u8; 20]) -> Vec<u8> {
 }
 
 /// Gnosis Safe module: `execTransactionFromModule(address,uint256,bytes,uint8)`.
-fn encode_exec_from_module(to: [u8; 20], value: &[u8; 32], call_data: &[u8], operation: u8,) -> Vec<u8> {
-    // Layout: selector | to | value(0) | offset | operation(0) | tail
+fn encode_exec_from_module_with_operation(
+    to: [u8; 20],
+    value: &[u8; 32],
+    call_data: &[u8],
+    operation: u8,
+) -> Vec<u8> {
+    // Layout: selector | to | value | offset | operation | tail
     let offset = 4usize * 32; // 4 head slots → offset = 128
     let tail = abi_dyn_tail(call_data);
     let mut out = Vec::with_capacity(4 + 4 * 32 + tail.len());
@@ -174,6 +179,11 @@ fn encode_exec_from_module(to: [u8; 20], value: &[u8; 32], call_data: &[u8], ope
     out.extend_from_slice(&right_align32(&[operation]));
     out.extend_from_slice(&tail);
     out
+}
+
+/// Encodes a regular Safe module call (`operation = 0`).
+fn encode_exec_from_module(to: [u8; 20], value: &[u8; 32], call_data: &[u8]) -> Vec<u8> {
+    encode_exec_from_module_with_operation(to, value, call_data, 0)
 }
 
 fn encode_service_write(
@@ -221,7 +231,7 @@ fn paid_service_registry_payload(
     }
     transactions.extend_from_slice(&encode_multi_send_transaction(registry, registry_call));
     let multi_send = call_with_bytes(selectors::MULTI_SEND, &[], &transactions);
-    encode_exec_from_module(SAFE_MULTI_SEND_ADDRESS, &[0u8; 32], &multi_send, 1)
+    encode_exec_from_module_with_operation(SAFE_MULTI_SEND_ADDRESS, &[0u8; 32], &multi_send, 1)
 }
 
 fn encode_fund_channel(account: [u8; 20], amount_word: [u8; 32]) -> Vec<u8> {
@@ -828,10 +838,9 @@ impl SafePayloadGenerator {
         to: [u8; 20],
         value: &[u8; 32],
         call_data: &[u8],
-        operation: u8
     ) -> TransactionRequest {
         TransactionRequest::default()
-            .with_input(encode_exec_from_module(to, value, call_data, operation))
+            .with_input(encode_exec_from_module(to, value, call_data))
             .with_to(self.module.into())
             .with_gas_limit(DEFAULT_TX_GAS)
     }
@@ -843,7 +852,7 @@ impl PayloadGenerator for SafePayloadGenerator {
     fn approve(&self, spender: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
         let amount_word = amount.amount().to_be_bytes();
         let call_data = encode_approve(spender.into(), &amount_word);
-        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
     }
 
     fn transfer<C: Currency>(
@@ -863,7 +872,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         } else {
             return Err(InvalidArguments("invalid currency"));
         };
-        Ok(self.module_exec_tx(to, &value, &call_data, 0))
+        Ok(self.module_exec_tx(to, &value, &call_data))
     }
 
     fn announce(
@@ -878,7 +887,7 @@ impl PayloadGenerator for SafePayloadGenerator {
             &key_binding_fee,
         );
 
-        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
     }
 
     fn fund_channel(&self, dest: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
@@ -894,7 +903,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let amount_word = truncated_word(&amount.amount().to_be_bytes(), 12);
         let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), amount_word);
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn close_incoming_channel(&self, source: Address) -> payload::Result<Self::TxRequest> {
@@ -902,7 +911,7 @@ impl PayloadGenerator for SafePayloadGenerator {
             return Err(InvalidArguments("Cannot close incoming channel from self"));
         }
         let call_data = encode_close_incoming_channel_safe(self.me.into(), source.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn initiate_outgoing_channel_closure(
@@ -916,7 +925,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let call_data =
             encode_initiate_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn finalize_outgoing_channel_closure(
@@ -930,12 +939,12 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let call_data =
             encode_finalize_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn redeem_ticket(&self, acked_ticket: RedeemableTicket) -> payload::Result<Self::TxRequest> {
         let call_data = encode_redeem_ticket_safe(self.me.into(), &acked_ticket, &self.me)?;
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data, 0))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn register_safe_by_node(&self, safe_addr: Address) -> payload::Result<Self::TxRequest> {
@@ -999,7 +1008,11 @@ impl PayloadGenerator for SafePayloadGenerator {
 
     fn deregister_service(&self, service_type: ServiceType) -> payload::Result<Self::TxRequest> {
         let call = encode_service_deregister(service_type, self.me.into());
-        Ok(self.module_exec_tx(self.contract_addrs.service_registry.into(), &[0u8; 32], &call, 0))
+        Ok(self.module_exec_tx(
+            self.contract_addrs.service_registry.into(),
+            &[0u8; 32],
+            &call,
+        ))
     }
 
     fn deploy_safe(
