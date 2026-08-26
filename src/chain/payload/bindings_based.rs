@@ -426,7 +426,11 @@ impl PayloadGenerator for SafePayloadGenerator {
         .abi_encode();
 
         let tx = TransactionRequest::default()
-            .with_input(module_payload(self.contract_addrs.token, U256::ZERO, inner_payload))
+            .with_input(module_payload(
+                self.contract_addrs.token,
+                U256::ZERO,
+                inner_payload,
+            ))
             .with_to(a2al(self.module))
             .with_gas_limit(DEFAULT_TX_GAS);
 
@@ -504,9 +508,11 @@ impl PayloadGenerator for SafePayloadGenerator {
         .abi_encode();
 
         Ok(TransactionRequest::default()
-            .with_input(
-                module_payload(self.contract_addrs.token, U256::ZERO, call_data),
-            )
+            .with_input(module_payload(
+                self.contract_addrs.token,
+                U256::ZERO,
+                call_data,
+            ))
             .with_to(a2al(self.module))
             .with_gas_limit(DEFAULT_TX_GAS))
     }
