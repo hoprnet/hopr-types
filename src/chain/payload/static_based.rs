@@ -154,14 +154,14 @@ fn encode_deregister_node_by_safe(node_addr: [u8; 20]) -> Vec<u8> {
 }
 
 /// Gnosis Safe module: `execTransactionFromModule(address,uint256,bytes,uint8)`.
-fn encode_exec_from_module(to: [u8; 20], call_data: &[u8]) -> Vec<u8> {
-    // Layout: selector | to | value(0) | offset | operation(0) | tail
+fn encode_exec_from_module(to: [u8; 20], value: &[u8; 32], call_data: &[u8]) -> Vec<u8> {
+    // Layout: selector | to | value | offset | operation(0) | tail
     let offset = 4usize * 32; // 4 head slots → offset = 128
     let tail = abi_dyn_tail(call_data);
     let mut out = Vec::with_capacity(4 + 4 * 32 + tail.len());
     out.extend_from_slice(&selectors::EXEC_TRANSACTION_FROM_MODULE);
     out.extend_from_slice(&addr32(to));
-    out.extend_from_slice(&[0u8; 32]); // value = 0
+    out.extend_from_slice(value);
     out.extend_from_slice(&word_usize(offset));
     out.extend_from_slice(&[0u8; 32]); // operation = 0 (Call)
     out.extend_from_slice(&tail);
@@ -404,10 +404,6 @@ fn make_default_target(channels: [u8; 20]) -> [u8; 32] {
 }
 
 // ─── Shared per-call TransactionRequest builders ──────────────────────────
-
-fn approve_tx(spender: [u8; 20], amount: &[u8; 32]) -> TransactionRequest {
-    TransactionRequest::default().with_input(encode_approve(spender, amount))
-}
 
 fn transfer_tx<C: Currency>(
     destination: Address,
@@ -723,9 +719,14 @@ impl SafePayloadGenerator {
     }
 
     /// Wraps `call_data` in an `execTransactionFromModule` call to `to`, targeting the Safe module.
-    fn module_exec_tx(&self, to: [u8; 20], call_data: &[u8]) -> TransactionRequest {
+    fn module_exec_tx(
+        &self,
+        to: [u8; 20],
+        value: &[u8; 32],
+        call_data: &[u8],
+    ) -> TransactionRequest {
         TransactionRequest::default()
-            .with_input(encode_exec_from_module(to, call_data))
+            .with_input(encode_exec_from_module(to, value, call_data))
             .with_to(self.module.into())
             .with_gas_limit(DEFAULT_TX_GAS)
     }
@@ -736,9 +737,8 @@ impl PayloadGenerator for SafePayloadGenerator {
 
     fn approve(&self, spender: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
         let amount_word = amount.amount().to_be_bytes();
-        Ok(approve_tx(spender.into(), &amount_word)
-            .with_to(self.contract_addrs.token.into())
-            .with_gas_limit(DEFAULT_TX_GAS))
+        let call_data = encode_approve(spender.into(), &amount_word);
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
     }
 
     fn transfer<C: Currency>(
@@ -746,16 +746,19 @@ impl PayloadGenerator for SafePayloadGenerator {
         destination: Address,
         amount: Balance<C>,
     ) -> payload::Result<Self::TxRequest> {
-        let to = if XDai::is::<C>() {
-            destination.into()
+        let amount_word = amount.amount().to_be_bytes();
+        let (to, value, call_data) = if XDai::is::<C>() {
+            (destination.into(), amount_word, Vec::new())
         } else if WxHOPR::is::<C>() {
-            self.contract_addrs.token.into()
+            (
+                self.contract_addrs.token.into(),
+                [0u8; 32],
+                encode_transfer(destination.into(), &amount_word),
+            )
         } else {
             return Err(InvalidArguments("invalid currency"));
         };
-        Ok(transfer_tx(destination, amount)?
-            .with_to(to)
-            .with_gas_limit(DEFAULT_TX_GAS))
+        Ok(self.module_exec_tx(to, &value, &call_data))
     }
 
     fn announce(
@@ -770,7 +773,7 @@ impl PayloadGenerator for SafePayloadGenerator {
             &key_binding_fee,
         );
 
-        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
     }
 
     fn fund_channel(&self, dest: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
@@ -786,7 +789,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let amount_word = truncated_word(&amount.amount().to_be_bytes(), 12);
         let call_data = encode_fund_channel_safe(self.me.into(), dest.into(), amount_word);
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn close_incoming_channel(&self, source: Address) -> payload::Result<Self::TxRequest> {
@@ -794,7 +797,7 @@ impl PayloadGenerator for SafePayloadGenerator {
             return Err(InvalidArguments("Cannot close incoming channel from self"));
         }
         let call_data = encode_close_incoming_channel_safe(self.me.into(), source.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn initiate_outgoing_channel_closure(
@@ -808,7 +811,7 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let call_data =
             encode_initiate_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn finalize_outgoing_channel_closure(
@@ -822,12 +825,12 @@ impl PayloadGenerator for SafePayloadGenerator {
         }
         let call_data =
             encode_finalize_outgoing_channel_closure_safe(self.me.into(), destination.into());
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn redeem_ticket(&self, acked_ticket: RedeemableTicket) -> payload::Result<Self::TxRequest> {
         let call_data = encode_redeem_ticket_safe(self.me.into(), &acked_ticket, &self.me)?;
-        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &call_data))
+        Ok(self.module_exec_tx(self.contract_addrs.channels.into(), &[0u8; 32], &call_data))
     }
 
     fn register_safe_by_node(&self, safe_addr: Address) -> payload::Result<Self::TxRequest> {
