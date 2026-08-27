@@ -125,7 +125,7 @@ impl SignableTransaction for TransactionRequest {
 fn module_payload(target: alloy::primitives::Address, value: U256, call_data: Vec<u8>) -> Vec<u8> {
     execTransactionFromModuleCall {
         to: target,
-        value: value,
+        value,
         data: call_data.into(),
         operation: Operation::Call as u8,
     }
