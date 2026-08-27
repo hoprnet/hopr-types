@@ -122,14 +122,18 @@ impl SignableTransaction for TransactionRequest {
     }
 }
 
-fn channels_payload(hopr_channels: alloy::primitives::Address, call_data: Vec<u8>) -> Vec<u8> {
+fn module_payload(target: alloy::primitives::Address, value: U256, call_data: Vec<u8>) -> Vec<u8> {
     execTransactionFromModuleCall {
-        to: hopr_channels,
-        value: U256::ZERO,
+        to: target,
+        value,
         data: call_data.into(),
         operation: Operation::Call as u8,
     }
     .abi_encode()
+}
+
+fn channels_payload(hopr_channels: alloy::primitives::Address, call_data: Vec<u8>) -> Vec<u8> {
+    module_payload(hopr_channels, U256::ZERO, call_data)
 }
 
 fn approve_tx(spender: alloy::primitives::Address, amount: HoprBalance) -> TransactionRequest {
@@ -542,8 +546,19 @@ impl PayloadGenerator for SafePayloadGenerator {
     type TxRequest = TransactionRequest;
 
     fn approve(&self, spender: Address, amount: HoprBalance) -> payload::Result<Self::TxRequest> {
-        let tx = approve_tx(a2al(spender), amount)
-            .with_to(self.contract_addrs.token)
+        let inner_payload = approveCall {
+            spender: a2al(spender),
+            value: U256::from_be_bytes(amount.amount().to_be_bytes()),
+        }
+        .abi_encode();
+
+        let tx = TransactionRequest::default()
+            .with_input(module_payload(
+                self.contract_addrs.token,
+                U256::ZERO,
+                inner_payload,
+            ))
+            .with_to(a2al(self.module))
             .with_gas_limit(DEFAULT_TX_GAS);
 
         Ok(tx)
@@ -561,8 +576,28 @@ impl PayloadGenerator for SafePayloadGenerator {
         } else {
             return Err(InvalidArguments("invalid currency"));
         };
-        let tx = transfer_tx(destination, amount)
-            .with_to(to)
+
+        let amount_u256 = U256::from_be_slice(&amount.amount().to_be_bytes());
+
+        let value = if XDai::is::<C>() {
+            amount_u256
+        } else {
+            U256::ZERO
+        };
+
+        let inner_payload = if WxHOPR::is::<C>() {
+            transferCall {
+                recipient: a2al(destination),
+                amount: amount_u256,
+            }
+            .abi_encode()
+        } else {
+            Vec::new()
+        };
+
+        let tx = TransactionRequest::default()
+            .with_input(module_payload(to, value, inner_payload))
+            .with_to(a2al(self.module))
             .with_gas_limit(DEFAULT_TX_GAS);
 
         Ok(tx)
@@ -600,15 +635,11 @@ impl PayloadGenerator for SafePayloadGenerator {
         .abi_encode();
 
         Ok(TransactionRequest::default()
-            .with_input(
-                execTransactionFromModuleCall {
-                    to: self.contract_addrs.token,
-                    value: U256::ZERO,
-                    data: call_data.into(),
-                    operation: Operation::Call as u8,
-                }
-                .abi_encode(),
-            )
+            .with_input(module_payload(
+                self.contract_addrs.token,
+                U256::ZERO,
+                call_data,
+            ))
             .with_to(a2al(self.module))
             .with_gas_limit(DEFAULT_TX_GAS))
     }

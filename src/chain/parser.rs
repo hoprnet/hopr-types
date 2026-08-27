@@ -89,6 +89,15 @@ impl ParsedHoprChainAction {
         let (target_contract, input, module_call) = if &tx_target == module {
             let module_call = execTransactionFromModuleCall::abi_decode(tx.input().as_ref())
                 .map_err(|e| ChainTypesError::ParseError(e.into()))?;
+            if !module_call.value.is_zero() && module_call.data.is_empty() {
+                return Ok((
+                    Self::WithdrawNative(
+                        module_call.to.0.0.into(),
+                        XDaiBalance::from_be_bytes(module_call.value.to_be_bytes::<32>()),
+                    ),
+                    signer,
+                ));
+            }
             (module_call.to.0.0.into(), module_call.data, true)
         } else if contract_addresses
             .into_iter()
