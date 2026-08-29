@@ -23,6 +23,23 @@ use crate::chain::{
     ContractAddresses, a2al, errors::ChainTypesError, payload::KeyBindAndAnnouncePayload,
 };
 
+/// Which account a withdrawal actually debits.
+///
+/// A withdrawal reaches the chain in one of two shapes, and the signer alone does not distinguish
+/// them: a [`BasicPayloadGenerator`](crate::chain::payload::BasicPayloadGenerator) emits a transfer
+/// the signing EOA pays for directly, while a
+/// [`SafePayloadGenerator`](crate::chain::payload::SafePayloadGenerator) wraps the same transfer in
+/// `execTransactionFromModule`, so the node key signs but the Safe pays. Both arrive here as the
+/// same `Withdraw*` variant, which is why the payer is carried alongside rather than inferred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Payer {
+    /// The signing EOA pays directly.
+    Eoa,
+    /// The transaction was executed by the Safe through its module, so the Safe pays. The signer
+    /// still pays the transaction fee.
+    Safe,
+}
+
 /// Represents the action previously parsed from an EIP-2718 transaction.
 ///
 /// This is effectively inverse of a [`PayloadGenerator`](crate::chain::payload::PayloadGenerator).
@@ -37,10 +54,10 @@ pub enum ParsedHoprChainAction {
         /// Optional multiaddress to announce.
         multiaddress: Option<Multiaddr>,
     },
-    /// Withdrawal of native XDai to an address.
-    WithdrawNative(Address, XDaiBalance),
-    /// Withdrawal of HOPR token to an address.
-    WithdrawToken(Address, HoprBalance),
+    /// Withdrawal of native XDai to an address, and the account it is debited from.
+    WithdrawNative(Address, XDaiBalance, Payer),
+    /// Withdrawal of HOPR token to an address, and the account it is debited from.
+    WithdrawToken(Address, HoprBalance, Payer),
     /// Funding of a payment channel to a given destination with a given amount.
     FundChannel(Address, HoprBalance),
     /// Payment channel closure initiation with the given ID.
@@ -90,10 +107,13 @@ impl ParsedHoprChainAction {
             let module_call = execTransactionFromModuleCall::abi_decode(tx.input().as_ref())
                 .map_err(|e| ChainTypesError::ParseError(e.into()))?;
             if !module_call.value.is_zero() && module_call.data.is_empty() {
+                // Executed by the Safe through its module, so the Safe holds the value being moved
+                // even though the node key signed the transaction.
                 return Ok((
                     Self::WithdrawNative(
                         module_call.to.0.0.into(),
                         XDaiBalance::from_be_bytes(module_call.value.to_be_bytes::<32>()),
+                        Payer::Safe,
                     ),
                     signer,
                 ));
@@ -105,10 +125,13 @@ impl ParsedHoprChainAction {
         {
             (tx_target, tx.input().clone(), false)
         } else if tx.value() > 0 {
+            // A bare value transfer to a non-contract address: no module in the path, so the signer
+            // pays out of its own balance.
             return Ok((
                 Self::WithdrawNative(
                     tx_target,
                     XDaiBalance::from_be_bytes(tx.value().to_be_bytes::<32>()),
+                    Payer::Eoa,
                 ),
                 signer,
             ));
@@ -290,10 +313,14 @@ impl ParsedHoprChainAction {
             let transfer = transferCall::abi_decode(input.as_ref())
                 .map_err(|e| ChainTypesError::ParseError(e.into()))?;
 
+            // The same `transfer` call reaches the token contract either directly from the signing
+            // EOA or wrapped in the Safe's `execTransactionFromModule`. `module_call` is the only
+            // thing that tells the two apart, and it decides whose tokens move.
             Ok((
                 Self::WithdrawToken(
                     transfer.recipient.0.0.into(),
                     HoprBalance::from_be_bytes(transfer.amount.to_be_bytes::<32>()),
+                    if module_call { Payer::Safe } else { Payer::Eoa },
                 ),
                 signer,
             ))
@@ -657,7 +684,11 @@ mod tests {
         )?;
         assert_eq!(
             action,
-            ParsedHoprChainAction::WithdrawNative([2u8; Address::SIZE].into(), 123_u32.into())
+            ParsedHoprChainAction::WithdrawNative(
+                [2u8; Address::SIZE].into(),
+                123_u32.into(),
+                Payer::Eoa
+            )
         );
         assert_eq!(signer, cp.public().to_address());
 
@@ -672,9 +703,15 @@ mod tests {
             &[1u8; Address::SIZE].into(),
             &CONTRACT_ADDRS,
         )?;
+        // Same signer, same recipient, same amount as above — only the payer differs, because this
+        // one went through the Safe's module. Nothing else in the decoded action records that.
         assert_eq!(
             action,
-            ParsedHoprChainAction::WithdrawNative([2u8; Address::SIZE].into(), 123_u32.into())
+            ParsedHoprChainAction::WithdrawNative(
+                [2u8; Address::SIZE].into(),
+                123_u32.into(),
+                Payer::Safe
+            )
         );
         assert_eq!(signer, cp.public().to_address());
 
@@ -698,7 +735,11 @@ mod tests {
         )?;
         assert_eq!(
             action,
-            ParsedHoprChainAction::WithdrawToken([2u8; Address::SIZE].into(), 123_u32.into())
+            ParsedHoprChainAction::WithdrawToken(
+                [2u8; Address::SIZE].into(),
+                123_u32.into(),
+                Payer::Eoa
+            )
         );
         assert_eq!(signer, cp.public().to_address());
 
@@ -713,9 +754,16 @@ mod tests {
             &[1u8; Address::SIZE].into(),
             &CONTRACT_ADDRS,
         )?;
+        // Both generators emit a `transfer` call to the token contract, so the decoded recipient
+        // and amount are identical and the signer is the same key. The payer is the only thing
+        // separating a transfer the EOA pays for from one the Safe pays for.
         assert_eq!(
             action,
-            ParsedHoprChainAction::WithdrawToken([2u8; Address::SIZE].into(), 123_u32.into())
+            ParsedHoprChainAction::WithdrawToken(
+                [2u8; Address::SIZE].into(),
+                123_u32.into(),
+                Payer::Safe
+            )
         );
         assert_eq!(signer, cp.public().to_address());
 

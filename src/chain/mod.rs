@@ -14,7 +14,7 @@ pub use {
     hopr_bindings::{
         ContractAddresses, exports, exports::alloy::primitives::Address as AlloyAddress,
     },
-    parser::ParsedHoprChainAction,
+    parser::{ParsedHoprChainAction, Payer},
 };
 
 pub mod prelude {
