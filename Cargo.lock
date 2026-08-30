@@ -2780,7 +2780,7 @@ dependencies = [
 
 [[package]]
 name = "hopr-types"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "aes",
  "anyhow",
