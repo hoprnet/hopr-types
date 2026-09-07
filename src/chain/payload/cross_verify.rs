@@ -11,8 +11,7 @@ use multiaddr::Multiaddr;
 use std::str::FromStr;
 
 use hopr_bindings::{
-    exports::alloy::sol_types::SolCall,
-    hopr_channels::HoprChannels::redeemTicketCall,
+    exports::alloy::sol_types::SolCall, hopr_channels::HoprChannels::redeemTicketCall,
 };
 
 use crate::chain::payload::tests::{
