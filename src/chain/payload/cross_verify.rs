@@ -10,12 +10,17 @@
 use multiaddr::Multiaddr;
 use std::str::FromStr;
 
+use hopr_bindings::{
+    exports::alloy::sol_types::SolCall, hopr_channels::HoprChannels::redeemTicketCall,
+};
+
 use crate::chain::payload::tests::{
     CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
 };
 use crate::chain::payload::{PayloadGenerator, SignableTransaction, bindings_based, static_based};
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
+use crate::internal::tickets::REDEEM_CALL_SELECTOR;
 use crate::primitive::prelude::*;
 
 lazy_static::lazy_static! {
@@ -70,6 +75,11 @@ macro_rules! assert_signed_eq {
             const_hex::encode(&*s),
         );
     }};
+}
+
+#[test]
+fn redeem_call_selector_matches_bindings() {
+    assert_eq!(REDEEM_CALL_SELECTOR, redeemTicketCall::SELECTOR);
 }
 
 #[tokio::test]
