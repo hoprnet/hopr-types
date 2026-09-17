@@ -108,6 +108,17 @@ mod tests {
 
     use super::*;
 
+    /// Pins the in-memory footprint of [`NodeId`].
+    ///
+    /// `NodeId` is `Copy` and appears in `RoutingOptions`, `DestinationRouting` and the session
+    /// manager, so its size propagates widely. It is currently dominated by the
+    /// `OffchainPublicKey` variant, whose cached decompressed point also forces the 8-byte
+    /// alignment.
+    #[test]
+    fn node_id_has_expected_memory_footprint() {
+        assert_eq!(200, size_of::<NodeId>());
+    }
+
     #[test]
     fn test_node_id_display_from_str() -> anyhow::Result<()> {
         let offchain = *OffchainKeypair::random().public();

@@ -5,7 +5,7 @@ use hex_literal::hex;
 use hopr_types::{
     chain::prelude::{BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator},
     crypto::prelude::{ChainKeypair, Keypair, OffchainKeypair, OffchainSignature, PublicKey},
-    internal::prelude::{AnnouncementData, KeyBinding},
+    internal::prelude::{AnnouncementData, KeyBinding, NodeId, RoutingOptions},
     primitive::prelude::{Address, HoprBalance, ToHex},
 };
 use multiaddr::Multiaddr;
@@ -79,6 +79,52 @@ fn memory_allocation_bench(c: &mut Criterion) {
         b.iter(|| {
             OffchainSignature::verify_batch(black_box(batch.iter()).filter_map(|entry| *entry))
         })
+    });
+
+    // Copy and hash cost of using a packet key as a map key. `OffchainPublicKey` is `Copy`, so
+    // every insert and lookup memcpies the whole struct; the hash itself only ever covers the
+    // compressed 32 bytes.
+    const MAP_SIZE: usize = 1_000;
+    let map_keys = (0..MAP_SIZE)
+        .map(|_| *OffchainKeypair::random().public())
+        .collect::<Vec<_>>();
+
+    group.bench_function("node_id_hashmap_insert", |b| {
+        b.iter(|| {
+            let mut map = std::collections::HashMap::with_capacity(MAP_SIZE);
+            for key in black_box(&map_keys) {
+                map.insert(*key, ());
+            }
+            map
+        })
+    });
+
+    let populated = map_keys
+        .iter()
+        .map(|k| (*k, ()))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    group.bench_function("node_id_hashmap_lookup", |b| {
+        b.iter(|| {
+            map_keys
+                .iter()
+                .filter(|k| black_box(&populated).contains_key(*k))
+                .count()
+        })
+    });
+
+    // `RoutingOptions::IntermediatePath` carries up to `MAX_INTERMEDIATE_HOPS` `NodeId`s and is
+    // cloned along the session path-planning route.
+    let routing_options = RoutingOptions::IntermediatePath(
+        (0..RoutingOptions::MAX_INTERMEDIATE_HOPS)
+            .map(|_| NodeId::from(*OffchainKeypair::random().public()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap(),
+    );
+
+    group.bench_function("routing_options_intermediate_path_clone", |b| {
+        b.iter(|| black_box(&routing_options).clone())
     });
 
     let contract_addrs = serde_json::from_str(CONTRACT_ADDRS_JSON).unwrap();

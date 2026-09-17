@@ -1448,6 +1448,18 @@ mod tests {
     const PRIVATE_KEY: [u8; 32] =
         hex!("e17fe86ce6e99f4806715b0c9412f8dad89334bf07f72d5834207a9d8f19d7f8");
 
+    /// Pins the in-memory footprint of the packet key.
+    ///
+    /// `OffchainPublicKey` is `Copy` and is embedded in paths, routing enums and several
+    /// long-lived caches, so its size is a load-bearing property rather than an
+    /// implementation detail. It currently carries a cached decompressed `EdwardsPoint`
+    /// (160 B) alongside the 32 B it is actually defined by.
+    #[test]
+    fn offchain_public_key_has_expected_memory_footprint() {
+        assert_eq!(32, OffchainPublicKey::SIZE, "serialized size");
+        assert_eq!(192, size_of::<OffchainPublicKey>(), "in-memory size");
+    }
+
     #[test]
     fn test_public_key_to_hex() -> anyhow::Result<()> {
         let pk = PublicKey::from_privkey(&hex!(
