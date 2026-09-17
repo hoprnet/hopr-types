@@ -421,11 +421,33 @@ pub type Hash = HashBase<sha3::Keccak256>;
 /// than Keccak256.
 pub type HashFast = HashBase<blake3::Hasher>;
 
-/// Represents an Ed25519 public key.
-#[derive(Clone, Copy, Eq)]
+/// Represents an Ed25519 public key in its compact (compressed) form.
+///
+/// This is the form to use wherever the key acts as an *identifier*: in maps, paths, protocol
+/// messages and anything that is stored. It is 32 bytes and cheap to copy, hash and compare.
+///
+/// Constructing it does **not** check that the bytes are a valid curve point, because doing so
+/// costs a point decompression and the vast majority of keys never enter an EC computation. Use
+/// [`OffchainPublicKey::validate`] at trust boundaries, or convert to
+/// [`ExpandedOffchainPublicKey`], which performs the check as part of the conversion.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct OffchainPublicKey {
-    compressed: CompressedEdwardsY,
+pub struct OffchainPublicKey(
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))] [u8; Self::SIZE],
+);
+
+/// Represents an Ed25519 public key in its expanded (decompressed) form.
+///
+/// Deriving this from an [`OffchainPublicKey`] is CPU-intensive, which is why it is a separate
+/// type rather than a cache inside the compact one: it can be computed once and reused across
+/// several computations that share the same key.
+///
+/// It deliberately implements neither `PartialEq`/`Eq`/`Hash` nor `Serialize`/`Deserialize` nor
+/// `Copy`. Reach for the compact [`OffchainPublicKey`] instead — it is free to obtain via
+/// [`AsRef`] — whenever the key is an identifier, a map key, or has to be stored.
+#[derive(Clone)]
+pub struct ExpandedOffchainPublicKey {
+    pub(crate) compact: OffchainPublicKey,
     pub(crate) edwards: EdwardsPoint,
 }
 
@@ -436,37 +458,69 @@ impl std::fmt::Debug for OffchainPublicKey {
     }
 }
 
-impl std::hash::Hash for OffchainPublicKey {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.compressed.hash(state);
-    }
-}
-
-impl PartialEq for OffchainPublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.compressed == other.compressed
+impl std::fmt::Debug for ExpandedOffchainPublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.compact, f)
     }
 }
 
 impl AsRef<[u8]> for OffchainPublicKey {
     fn as_ref(&self) -> &[u8] {
-        &self.compressed.0
+        &self.0
+    }
+}
+
+/// Note that this is the only [`AsRef`] implementation on [`ExpandedOffchainPublicKey`], so that
+/// a bare `as_ref()` stays unambiguous at the call sites. Adding another one later would be a
+/// breaking change to type inference, not merely an addition.
+impl AsRef<OffchainPublicKey> for ExpandedOffchainPublicKey {
+    fn as_ref(&self) -> &OffchainPublicKey {
+        &self.compact
+    }
+}
+
+impl From<&ExpandedOffchainPublicKey> for OffchainPublicKey {
+    fn from(value: &ExpandedOffchainPublicKey) -> Self {
+        value.compact
+    }
+}
+
+impl From<ExpandedOffchainPublicKey> for OffchainPublicKey {
+    fn from(value: ExpandedOffchainPublicKey) -> Self {
+        value.compact
+    }
+}
+
+/// Performs the Ed25519 point decompression, and therefore also validates that the compact key
+/// is a point on the curve.
+///
+/// This is CPU-intensive. Note that the infallible `From` counterpart must never be added: the
+/// blanket `impl<T, U: Into<T>> TryFrom<U> for T` would then collide with this implementation.
+impl TryFrom<&OffchainPublicKey> for ExpandedOffchainPublicKey {
+    type Error = GeneralError;
+
+    fn try_from(value: &OffchainPublicKey) -> std::result::Result<Self, Self::Error> {
+        let edwards = CompressedEdwardsY(value.0)
+            .decompress()
+            .ok_or(ParseError("OffchainPublicKey.decompress".into()))?;
+
+        Ok(Self {
+            compact: *value,
+            edwards,
+        })
     }
 }
 
 impl TryFrom<&[u8]> for OffchainPublicKey {
     type Error = GeneralError;
 
+    /// Checks the length only. See the note on [`OffchainPublicKey`] about curve validity.
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
-        let compressed = CompressedEdwardsY::from_slice(value)
-            .map_err(|_| ParseError("OffchainPublicKey".into()))?;
-        let edwards = compressed
-            .decompress()
-            .ok_or(ParseError("OffchainPublicKey.decompress".into()))?;
-        Ok(Self {
-            compressed,
-            edwards,
-        })
+        Ok(Self(
+            value
+                .try_into()
+                .map_err(|_| ParseError("OffchainPublicKey".into()))?,
+        ))
     }
 }
 
@@ -486,21 +540,34 @@ impl TryFrom<[u8; OffchainPublicKey::SIZE]> for OffchainPublicKey {
 
 impl From<OffchainPublicKey> for [u8; OffchainPublicKey::SIZE] {
     fn from(value: OffchainPublicKey) -> Self {
-        value.compressed.0
-    }
-}
-
-impl From<OffchainPublicKey> for PeerId {
-    fn from(value: OffchainPublicKey) -> Self {
-        let k = libp2p_identity::ed25519::PublicKey::try_from_bytes(value.compressed.as_bytes())
-            .expect("offchain public key is always a valid ed25519 public key");
-        PeerId::from_public_key(&k.into())
+        value.0
     }
 }
 
 impl From<&OffchainPublicKey> for PeerId {
     fn from(value: &OffchainPublicKey) -> Self {
-        (*value).into()
+        // Built from the raw bytes rather than via `libp2p_identity::ed25519::PublicKey`, whose
+        // constructor decompresses the point. That would make this conversion both fallible and
+        // CPU-intensive, and it runs on every outgoing packet and acknowledgement.
+        //
+        // An Ed25519 peer id is the identity multihash of the protobuf-encoded public key, whose
+        // shape is fixed for this key type:
+        //   0x00 0x24             multihash code = identity, digest size = 36
+        //   0x08 0x01             protobuf field 1 `Type`, varint, KeyType::Ed25519 = 1
+        //   0x12 0x20 <32 bytes>  protobuf field 2 `Data`, length-delimited
+        let mut buf = [0u8; PEER_ID_MULTIHASH_PREFIX.len() + OffchainPublicKey::SIZE];
+        buf[..PEER_ID_MULTIHASH_PREFIX.len()].copy_from_slice(&PEER_ID_MULTIHASH_PREFIX);
+        buf[PEER_ID_MULTIHASH_PREFIX.len()..].copy_from_slice(&value.0);
+
+        // Cannot fail: the code is `identity` and the digest is 36 bytes, which is within both
+        // the 64-byte multihash capacity and the 42-byte inline-key limit.
+        PeerId::from_bytes(&buf).expect("fixed-shape identity multihash is always a valid peer id")
+    }
+}
+
+impl From<OffchainPublicKey> for PeerId {
+    fn from(value: OffchainPublicKey) -> Self {
+        (&value).into()
     }
 }
 
@@ -538,39 +605,63 @@ impl OffchainPublicKey {
 
     /// Tries to convert an Ed25519 `PeerId` to `OffchainPublicKey`.
     ///
-    /// This is a CPU-intensive operation, as it performs Ed25519 point decompression
-    /// and mapping to the Curve255919 point representation.
+    /// Reads the key straight out of the peer id's identity multihash. As with
+    /// [`TryFrom<&[u8]>`](OffchainPublicKey::try_from), the bytes are not checked against the
+    /// curve; see the note on [`OffchainPublicKey`].
     pub fn from_peerid(peerid: &PeerId) -> std::result::Result<Self, GeneralError> {
         let mh = peerid.as_ref();
-        if mh.code() == 0 {
-            libp2p_identity::PublicKey::try_decode_protobuf(mh.digest())
-                .map_err(|_| ParseError("invalid ed25519 peer id".into()))
-                .and_then(|pk| {
-                    pk.try_into_ed25519()
-                        .map(|p| p.to_bytes())
-                        .map_err(|_| ParseError("invalid ed25519 peer id".into()))
-                })
-                .and_then(Self::try_from)
-        } else {
-            Err(ParseError("invalid ed25519 peer id".into()))
+        let digest = mh.digest();
+
+        // See `From<&OffchainPublicKey> for PeerId` for the layout. Peer ids that hash the key
+        // instead of inlining it (multihash code `sha2-256`) do not carry the key at all.
+        if mh.code() != PEER_ID_MULTIHASH_PREFIX[0] as u64
+            || digest.len() != PEER_ID_MULTIHASH_PREFIX.len() - 2 + Self::SIZE
+            || digest[..PEER_ID_MULTIHASH_PREFIX.len() - 2] != PEER_ID_MULTIHASH_PREFIX[2..]
+        {
+            return Err(ParseError("invalid ed25519 peer id".into()));
         }
+
+        Self::try_from(&digest[PEER_ID_MULTIHASH_PREFIX.len() - 2..])
+    }
+
+    /// Checks that these bytes really are a point on the Ed25519 curve.
+    ///
+    /// This is CPU-intensive, since it performs the point decompression. Use it at boundaries
+    /// where an unvalidated key would only fail much later, such as when ingesting keys from the
+    /// chain indexer or from storage.
+    pub fn validate(&self) -> std::result::Result<(), GeneralError> {
+        ExpandedOffchainPublicKey::try_from(self).map(|_| ())
     }
 }
 
-impl From<&OffchainPublicKey> for EdwardsPoint {
-    fn from(value: &OffchainPublicKey) -> Self {
+/// The fixed prefix of an Ed25519 peer id: the identity multihash header followed by the
+/// protobuf tags of `libp2p`'s `keys.proto`. See `From<&OffchainPublicKey> for PeerId`.
+const PEER_ID_MULTIHASH_PREFIX: [u8; 6] = [0x00, 0x24, 0x08, 0x01, 0x12, 0x20];
+
+impl From<&ExpandedOffchainPublicKey> for EdwardsPoint {
+    fn from(value: &ExpandedOffchainPublicKey) -> Self {
         value.edwards
     }
 }
 
 impl<'a> From<&'a OffchainPublicKey> for &'a Array<u8, typenum::U32> {
     fn from(value: &'a OffchainPublicKey) -> &'a Array<u8, typenum::U32> {
-        Array::cast_from_core(&value.compressed.0)
+        Array::cast_from_core(&value.0)
     }
 }
 
-impl From<&OffchainPublicKey> for MontgomeryPoint {
-    fn from(value: &OffchainPublicKey) -> Self {
+/// Delegates to the compact implementation rather than repeating it.
+///
+/// Both must yield the same bytes: this value is the Sphinx key-derivation salt, and a packet's
+/// sender derives it from the expanded key while each relayer derives it from the compact one.
+impl<'a> From<&'a ExpandedOffchainPublicKey> for &'a Array<u8, typenum::U32> {
+    fn from(value: &'a ExpandedOffchainPublicKey) -> &'a Array<u8, typenum::U32> {
+        (&value.compact).into()
+    }
+}
+
+impl From<&ExpandedOffchainPublicKey> for MontgomeryPoint {
+    fn from(value: &ExpandedOffchainPublicKey) -> Self {
         // The Curve25519 computations are mostly not used, so we can do the conversion
         // here without caching.
         value.edwards.to_montgomery()
@@ -1431,9 +1522,10 @@ mod tests {
     use crate::crypto::types::BjjPublicKey;
     use crate::crypto::{
         keypairs::{Keypair, OffchainKeypair},
+        signing::OffchainSignature,
         types::{
-            Challenge, HalfKey, HalfKeyChallenge, Hash, OffchainPublicKey, PublicKey, Response,
-            SimplePseudonym,
+            Challenge, ExpandedOffchainPublicKey, HalfKey, HalfKeyChallenge, Hash,
+            OffchainPublicKey, PublicKey, Response, SimplePseudonym,
         },
     };
 
@@ -1452,12 +1544,95 @@ mod tests {
     ///
     /// `OffchainPublicKey` is `Copy` and is embedded in paths, routing enums and several
     /// long-lived caches, so its size is a load-bearing property rather than an
-    /// implementation detail. It currently carries a cached decompressed `EdwardsPoint`
-    /// (160 B) alongside the 32 B it is actually defined by.
+    /// implementation detail. The decompressed point lives in
+    /// [`ExpandedOffchainPublicKey`] instead, which is deliberately not `Copy`.
     #[test]
     fn offchain_public_key_has_expected_memory_footprint() {
         assert_eq!(32, OffchainPublicKey::SIZE, "serialized size");
-        assert_eq!(192, size_of::<OffchainPublicKey>(), "in-memory size");
+        assert_eq!(32, size_of::<OffchainPublicKey>(), "in-memory size");
+        assert_eq!(192, size_of::<ExpandedOffchainPublicKey>(), "expanded size");
+    }
+
+    #[test]
+    fn offchain_public_key_round_trips_through_peer_id() -> anyhow::Result<()> {
+        for _ in 0..32 {
+            let key = *OffchainKeypair::random().public();
+            let peer_id = PeerId::from(&key);
+
+            // The hand-built multihash must agree with what libp2p itself would produce.
+            let libp2p_key = libp2p_identity::ed25519::PublicKey::try_from_bytes(key.as_ref())?;
+            assert_eq!(PeerId::from_public_key(&libp2p_key.into()), peer_id);
+
+            assert_eq!(key, OffchainPublicKey::from_peerid(&peer_id)?);
+            assert_eq!(peer_id.to_base58(), key.to_peerid_str());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn offchain_public_key_rejects_peer_ids_that_do_not_carry_a_key() -> anyhow::Result<()> {
+        // Inline multihash, but the digest is not a protobuf-wrapped Ed25519 key.
+        assert!(OffchainPublicKey::from_peerid(&PeerId::random()).is_err());
+
+        // A peer id that hashes its key (multihash `sha2-256`) does not carry the key at all.
+        let mut hashed = [0u8; 2 + 32];
+        hashed[..2].copy_from_slice(&[0x12, 0x20]);
+        hashed[2..].copy_from_slice(&[7u8; 32]);
+        let hashed = PeerId::from_bytes(&hashed).expect("valid sha2-256 peer id");
+        assert!(OffchainPublicKey::from_peerid(&hashed).is_err());
+
+        Ok(())
+    }
+
+    /// The compact key does not verify that its bytes are on the curve, so that the common case
+    /// (a key that is only ever an identifier) does not pay for a point decompression. The check
+    /// happens on expansion, and everything downstream of it must fail rather than panic.
+    #[test]
+    fn offchain_public_key_defers_curve_validation_to_expansion() -> anyhow::Result<()> {
+        // Roughly half of all 32-byte strings encode a Y with no corresponding X, so searching
+        // a small deterministic range is more honest than hard-coding a magic vector.
+        let not_on_curve = (0u8..=u8::MAX)
+            .map(|i| {
+                let mut bytes = [0u8; OffchainPublicKey::SIZE];
+                bytes[0] = i;
+                OffchainPublicKey::try_from(bytes).expect("length is exact")
+            })
+            .find(|key| key.validate().is_err())
+            .expect("some 32-byte string is not a valid curve point");
+
+        assert!(not_on_curve.validate().is_err());
+        assert!(ExpandedOffchainPublicKey::try_from(&not_on_curve).is_err());
+
+        // Must not panic, even though the key is nonsense.
+        let _ = PeerId::from(&not_on_curve);
+        let _ = not_on_curve.to_hex();
+
+        let signature = OffchainSignature::sign_message(b"msg", &OffchainKeypair::random());
+        assert!(!signature.verify_message(b"msg", &not_on_curve));
+        assert!(!OffchainSignature::verify_batch([(
+            (b"msg".as_slice(), signature),
+            not_on_curve
+        )]));
+
+        Ok(())
+    }
+
+    /// The Sphinx key derivation salts with these bytes, and a packet's sender derives them from
+    /// the expanded key while each relayer derives them from the compact one.
+    #[test]
+    fn expanded_offchain_public_key_agrees_with_compact_on_the_salt_bytes() -> anyhow::Result<()> {
+        let compact = *OffchainKeypair::random().public();
+        let expanded = ExpandedOffchainPublicKey::try_from(&compact)?;
+
+        let from_compact: &hybrid_array::Array<u8, typenum::U32> = (&compact).into();
+        let from_expanded: &hybrid_array::Array<u8, typenum::U32> = (&expanded).into();
+
+        assert_eq!(from_compact, from_expanded);
+        assert_eq!(compact, *expanded.as_ref());
+        assert_eq!(compact.as_ref(), from_compact.as_slice());
+
+        Ok(())
     }
 
     #[test]
