@@ -34,9 +34,10 @@ jobs:
       source_branch: ${{ github.ref_name }}
       runner: depot-ubuntu-24.04-4
       bencher_project: ${{ github.event.repository.name }}
-      # Benchmarks disabled for now — flip these two booleans back to re-enable.
-      should_build: false
-      should_run: false
+      # Re-enabled to track the public-key benchmarks through the compact/expanded
+      # `OffchainPublicKey` split (hopr-types#52), which is gated on them.
+      should_build: true
+      should_run: true
       build_command: "nix build -L .#bench-build"
       run_command: "nix run .#bench-run"
     secrets:

@@ -15,7 +15,7 @@ use crate::crypto::{
     errors,
     errors::CryptoError::InvalidInputValue,
     primitives::{PixDepositAddress, PixDepositSecret},
-    types::{OffchainPublicKey, PublicKey},
+    types::{ExpandedOffchainPublicKey, OffchainPublicKey, PublicKey},
     utils::{SecretValue, k256_scalar_from_bytes, random_group_element, x25519_scalar_from_bytes},
 };
 
@@ -49,8 +49,11 @@ pub trait Keypair: ConstantTimeEq + Sized {
 }
 
 /// Represents a keypair consisting of an Ed25519 private and public key
+///
+/// The public key is held in its [expanded](ExpandedOffchainPublicKey) form, since a node signs
+/// with its own key constantly; the compact form is a borrow of a field and so stays free.
 #[derive(Clone, Debug)]
-pub struct OffchainKeypair(SecretValue<typenum::U32>, OffchainPublicKey);
+pub struct OffchainKeypair(SecretValue<typenum::U32>, ExpandedOffchainPublicKey);
 
 impl Keypair for OffchainKeypair {
     type Public = OffchainPublicKey;
@@ -64,7 +67,7 @@ impl Keypair for OffchainKeypair {
     fn from_secret(bytes: &[u8]) -> errors::Result<Self> {
         Ok(Self(
             bytes.try_into().map_err(|_| InvalidInputValue("bytes"))?,
-            OffchainPublicKey::from_privkey(bytes)?,
+            (&OffchainPublicKey::from_privkey(bytes)?).try_into()?,
         ))
     }
 
@@ -73,6 +76,15 @@ impl Keypair for OffchainKeypair {
     }
 
     fn public(&self) -> &Self::Public {
+        &self.1.compact
+    }
+}
+
+impl OffchainKeypair {
+    /// The [expanded](ExpandedOffchainPublicKey) form of this keypair's public key.
+    ///
+    /// Already computed, so this is free.
+    pub fn public_expanded(&self) -> &ExpandedOffchainPublicKey {
         &self.1
     }
 }
@@ -108,7 +120,7 @@ impl From<&OffchainKeypair> for libp2p_identity::Keypair {
 
 impl From<&OffchainKeypair> for libp2p_identity::PeerId {
     fn from(value: &OffchainKeypair) -> Self {
-        value.1.into()
+        value.public().into()
     }
 }
 
