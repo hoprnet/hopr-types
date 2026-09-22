@@ -268,20 +268,32 @@ impl OffchainSignature {
 
         // Get the verifying key from the SAME keypair, avoiding Double Public Key Signing Function Oracle Attack on
         // Ed25519 See https://github.com/MystenLabs/ed25519-unsafe-libs for details
-        let verifying = ed25519_dalek::VerifyingKey::from(signing_keypair.public().edwards);
+        let verifying =
+            ed25519_dalek::VerifyingKey::from(signing_keypair.public_expanded().edwards);
 
         ed25519_dalek::hazmat::raw_sign::<Sha512>(&expanded_sk, msg, &verifying).into()
     }
 
     /// Verify this signature of the given message and [OffchainPublicKey].
+    ///
+    /// Returns `false` if `public_key` is not a valid point on the Ed25519 curve.
+    ///
+    /// Note that taking the compact key costs nothing over taking an expanded one:
+    /// `ed25519_dalek::VerifyingKey` stores both forms, so building it from a point compresses
+    /// it, which is the same single field exponentiation as decompressing the compact bytes.
     pub fn verify_message(&self, msg: &[u8], public_key: &OffchainPublicKey) -> bool {
         let sgn = ed25519_dalek::Signature::from_slice(&self.0)
             .expect("cannot fail: OffchainSignature always contains a valid signature");
-        let pk = ed25519_dalek::VerifyingKey::from(public_key.edwards);
-        pk.verify_strict(msg, &sgn).is_ok()
+
+        ed25519_dalek::VerifyingKey::try_from(public_key.as_ref())
+            .is_ok_and(|pk| pk.verify_strict(msg, &sgn).is_ok())
     }
 
     /// Performs optimized signature verification of multiple signed messages and public keys.
+    ///
+    /// Returns `false` if any of the public keys is not a valid point on the Ed25519 curve; such
+    /// a key could not have produced a valid signature anyway, and callers that need to know
+    /// *which* entry failed already fall back to verifying entries individually.
     pub fn verify_batch<
         M: AsRef<[u8]>,
         I: IntoIterator<Item = ((M, OffchainSignature), OffchainPublicKey)>,
@@ -298,10 +310,32 @@ impl OffchainSignature {
         let mut signatures: Vec<ed25519_dalek::Signature> = Vec::with_capacity(capacity);
         let mut pub_keys: Vec<ed25519_dalek::VerifyingKey> = Vec::with_capacity(capacity);
 
+        // Building a `VerifyingKey` costs a point decompression, and batches are overwhelmingly
+        // "many messages from one peer" - acknowledgements arrive grouped per sender - so do it
+        // once per distinct key. A linear scan beats a hash map because the number of distinct
+        // keys is typically one; the memo is capped so that a batch of many distinct keys cannot
+        // turn that scan into quadratic work.
+        const MEMO_CAPACITY: usize = 8;
+        let mut seen = arrayvec::ArrayVec::<
+            (OffchainPublicKey, ed25519_dalek::VerifyingKey),
+            MEMO_CAPACITY,
+        >::new();
+
         for ((msg, sig), pk) in entries {
+            let verifying = match seen.iter().find(|(seen_key, _)| *seen_key == pk) {
+                Some((_, verifying)) => *verifying,
+                None => match ed25519_dalek::VerifyingKey::try_from(pk.as_ref()) {
+                    Ok(verifying) => {
+                        let _ = seen.try_push((pk, verifying));
+                        verifying
+                    }
+                    Err(_) => return false,
+                },
+            };
+
             owned_msgs.push(msg);
             signatures.push(ed25519_dalek::Signature::from_bytes(&sig.0));
-            pub_keys.push(ed25519_dalek::VerifyingKey::from(pk.edwards));
+            pub_keys.push(verifying);
         }
 
         let msgs: Vec<&[u8]> = owned_msgs.iter().map(AsRef::as_ref).collect();
