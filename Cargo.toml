@@ -221,7 +221,7 @@ uuid = { version = "1.24.0", optional = true, features = ["serde", "v4"] }
 zeroize = { version = "1.9.0", optional = true, features = ["zeroize_derive"] }
 
 [dev-dependencies]
-hopr-bindings = "5.0.0"
+hopr-bindings = "5.1.0"
 anyhow = "1.0.102"
 bimap = "0.6.3"
 criterion = "0.8.2"
