@@ -15,7 +15,7 @@ use hopr_bindings::{
     },
     hopr_node_management_module::HoprNodeManagementModule::execTransactionFromModuleCall,
     hopr_node_safe_registry::HoprNodeSafeRegistry::registerSafeByNodeCall,
-    hopr_token::HoprToken::{sendCall, transferCall},
+    hopr_token::HoprToken::{approveCall, sendCall, transferCall},
 };
 use multiaddr::Multiaddr;
 
@@ -58,6 +58,9 @@ pub enum ParsedHoprChainAction {
     WithdrawNative(Address, XDaiBalance, Payer),
     /// Withdrawal of HOPR token to an address, and the account it is debited from.
     WithdrawToken(Address, HoprBalance, Payer),
+    /// Approval of the given spender to spend the given absolute amount of HOPR token,
+    /// and the account that grants the allowance.
+    Approve(Address, HoprBalance, Payer),
     /// Funding of a payment channel to a given destination with a given amount.
     FundChannel(Address, HoprBalance),
     /// Payment channel closure initiation with the given ID.
@@ -308,6 +311,18 @@ impl ParsedHoprChainAction {
                         "token send transaction transaction has invalid type"
                     )))?
                 }
+            }
+
+            if let Ok(approve) = approveCall::abi_decode(input.as_ref()) {
+                // As with `transfer` below, `module_call` decides whose allowance is set.
+                return Ok((
+                    Self::Approve(
+                        approve.spender.0.0.into(),
+                        HoprBalance::from_be_bytes(approve.value.to_be_bytes::<32>()),
+                        if module_call { Payer::Safe } else { Payer::Eoa },
+                    ),
+                    signer,
+                ));
             }
 
             let transfer = transferCall::abi_decode(input.as_ref())
@@ -764,6 +779,50 @@ mod tests {
                 123_u32.into(),
                 Payer::Safe
             )
+        );
+        assert_eq!(signer, cp.public().to_address());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn approve_action_should_decode() -> anyhow::Result<()> {
+        let cp = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+        let spender: Address = [2u8; Address::SIZE].into();
+        // Above `u128::MAX`, so a truncated amount would not round-trip.
+        let amount = HoprBalance::from(U256::MAX - U256::from(7u32));
+
+        let basic_gen = BasicPayloadGenerator::new(cp.public().to_address(), *CONTRACT_ADDRS);
+        let signed_tx = basic_gen
+            .approve(spender, amount)?
+            .sign_and_encode_to_eip2718(1, 1, None, &cp)
+            .await?;
+
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::Approve(spender, amount, Payer::Eoa)
+        );
+        assert_eq!(signer, cp.public().to_address());
+
+        let safe_gen = SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into());
+        let signed_tx = safe_gen
+            .approve(spender, amount)?
+            .sign_and_encode_to_eip2718(1, 1, None, &cp)
+            .await?;
+
+        let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+            &signed_tx,
+            &[1u8; Address::SIZE].into(),
+            &CONTRACT_ADDRS,
+        )?;
+        assert_eq!(
+            action,
+            ParsedHoprChainAction::Approve(spender, amount, Payer::Safe)
         );
         assert_eq!(signer, cp.public().to_address());
 
