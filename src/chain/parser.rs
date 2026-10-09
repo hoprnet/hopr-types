@@ -23,7 +23,7 @@ use crate::chain::{
     ContractAddresses, a2al, errors::ChainTypesError, payload::KeyBindAndAnnouncePayload,
 };
 
-/// Which account a withdrawal actually debits.
+/// Which account a withdrawal actually debits or an approval grants the allowance from.
 ///
 /// A withdrawal reaches the chain in one of two shapes, and the signer alone does not distinguish
 /// them: a [`BasicPayloadGenerator`](crate::chain::payload::BasicPayloadGenerator) emits a transfer
