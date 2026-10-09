@@ -160,7 +160,10 @@ impl Display for ChainEvent {
                 write!(f, "service registry node safe registry changed to {a}")
             }
             ChainEvent::SafeAllowanceChanged(safe, allowance) => {
-                write!(f, "safe {safe} allowance for channels changed to {allowance}")
+                write!(
+                    f,
+                    "safe {safe} allowance for channels changed to {allowance}"
+                )
             }
         }
     }
@@ -309,7 +312,10 @@ mod tests {
             event.to_string()
         );
         assert!(event.is_safe_allowance_changed());
-        assert_eq!(Some((safe, allowance)), event.try_as_safe_allowance_changed());
+        assert_eq!(
+            Some((safe, allowance)),
+            event.try_as_safe_allowance_changed()
+        );
 
         Ok(())
     }
