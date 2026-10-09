@@ -94,6 +94,12 @@ pub enum ChainEvent {
 
     /// The service registry now reads node-to-Safe bindings from a different registry contract.
     ServiceRegistryPointerChanged(Address),
+
+    /// The wxHOPR allowance that the given Safe grants to the Channels contract has changed.
+    ///
+    /// The [`HoprBalance`] is the new allowance, not the difference. The allowance goes down when
+    /// a channel is opened or funded from the Safe, and is set by an `approve` call of the Safe.
+    SafeAllowanceChanged(Address, HoprBalance),
 }
 
 impl Display for ChainEvent {
@@ -152,6 +158,9 @@ impl Display for ChainEvent {
             }
             ChainEvent::ServiceRegistryPointerChanged(a) => {
                 write!(f, "service registry node safe registry changed to {a}")
+            }
+            ChainEvent::SafeAllowanceChanged(safe, allowance) => {
+                write!(f, "safe {safe} allowance for channels changed to {allowance}")
             }
         }
     }
@@ -285,6 +294,22 @@ mod tests {
             pointer_changed.to_string()
         );
         assert!(pointer_changed.is_service_registry_pointer_changed());
+
+        Ok(())
+    }
+
+    #[test]
+    fn safe_allowance_event_displays_and_exposes_accessors() -> anyhow::Result<()> {
+        let safe = Address::from(OWNER);
+        let allowance: HoprBalance = "37.5 wxHOPR".parse()?;
+        let event = ChainEvent::SafeAllowanceChanged(safe, allowance);
+
+        assert_eq!(
+            format!("safe {safe} allowance for channels changed to {allowance}"),
+            event.to_string()
+        );
+        assert!(event.is_safe_allowance_changed());
+        assert_eq!(Some((safe, allowance)), event.try_as_safe_allowance_changed());
 
         Ok(())
     }
