@@ -652,6 +652,18 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(transfer_tx(destination, amount)?.with_to(to))
     }
 
+    fn send(
+        &self,
+        destination: Address,
+        amount: HoprBalance,
+        data: &[u8],
+    ) -> payload::Result<Self::TxRequest> {
+        let amount_word = amount.amount().to_be_bytes();
+        Ok(TransactionRequest::default()
+            .with_input(encode_send(destination.into(), &amount_word, data))
+            .with_to(self.contract_addrs.token.into()))
+    }
+
     fn announce(
         &self,
         announcement: AnnouncementData,
@@ -873,6 +885,17 @@ impl PayloadGenerator for SafePayloadGenerator {
             return Err(InvalidArguments("invalid currency"));
         };
         Ok(self.module_exec_tx(to, &value, &call_data))
+    }
+
+    fn send(
+        &self,
+        destination: Address,
+        amount: HoprBalance,
+        data: &[u8],
+    ) -> payload::Result<Self::TxRequest> {
+        let amount_word = amount.amount().to_be_bytes();
+        let call_data = encode_send(destination.into(), &amount_word, data);
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
     }
 
     fn announce(
@@ -1124,6 +1147,72 @@ mod tests {
             .await?;
         insta::assert_snapshot!("withdraw_safe", const_hex::encode(signed_tx));
 
+        Ok(())
+    }
+
+    /// `execTransactionFromModule(token, 0, send(router, 1000, aggregator ‖ note), Call)` as
+    /// hopr-strategy encoded the routed Curvy shield before `send` existed here. The vector is an
+    /// independent reference (hand-built from the ABI, not from either generator), so this checks
+    /// the encoding rather than pinning whatever the generators currently produce.
+    const ROUTED_SHIELD_MODULE_CALL: &str = concat!(
+        "468721a7000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000",
+        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "00000000000000000000000000000000000001649bd9bbc6000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000003e80000000000000000",
+        "000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000",
+        "00000000000000e0000000000000000000000000cccccccccccccccccccccccccccccccccccccccc0000000000000000",
+        "000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000",
+        "000000000000000200000000000000000000000000000000000000000000000000000000000003e80000000000000000",
+        "000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000",
+        "000000000000000500000000000000000000000000000000000000000000000000000000000000060000000000000000",
+        "0000000000000000000000000000000000000000",
+    );
+
+    /// `abi.encode(address aggregator, Note note)` for aggregator `0xcc…` and the note
+    /// `(1, 2, 1000, [4, 5], 6)`: the 224 bytes a Curvy shield router hook decodes.
+    fn router_user_data() -> Vec<u8> {
+        let mut data = vec![0u8; 12];
+        data.extend_from_slice(&[0xcc; Address::SIZE]);
+        for value in [1u64, 2, 1000, 4, 5, 6] {
+            let mut word = [0u8; 32];
+            word[24..].copy_from_slice(&value.to_be_bytes());
+            data.extend_from_slice(&word);
+        }
+        data
+    }
+
+    #[test]
+    fn send_matches_the_reference_encoding() -> anyhow::Result<()> {
+        let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+        let addrs = crate::chain::ContractAddresses {
+            token: [0xaa; Address::SIZE].into(),
+            ..*CONTRACT_ADDRS
+        };
+        let router: Address = [0xbb; Address::SIZE].into();
+        let module: Address = [0xdd; Address::SIZE].into();
+
+        let safe = SafePayloadGenerator::new(&key, addrs, module).send(
+            router,
+            HoprBalance::from(1000),
+            &router_user_data(),
+        )?;
+        assert_eq!(const_hex::encode(&safe.input), ROUTED_SHIELD_MODULE_CALL);
+        assert_eq!(safe.to, Some(module.into()));
+
+        // The plain `send` is the bytes the module forwards to the token: after the module head
+        // (selector and five words) and before the tail's ABI padding.
+        let inner = (4 + 5 * 32) * 2..(4 + 5 * 32 + 0x164) * 2;
+        let basic = BasicPayloadGenerator::new((&key).into(), addrs).send(
+            router,
+            HoprBalance::from(1000),
+            &router_user_data(),
+        )?;
+        assert_eq!(
+            const_hex::encode(&basic.input),
+            &ROUTED_SHIELD_MODULE_CALL[inner]
+        );
+        assert_eq!(basic.to, Some([0xaa; Address::SIZE]));
         Ok(())
     }
 }

@@ -303,11 +303,18 @@ impl ParsedHoprChainAction {
                         },
                         signer,
                     ));
-                } else {
-                    Err(ChainTypesError::ParseError(anyhow::anyhow!(
-                        "token send transaction transaction has invalid type"
-                    )))?
                 }
+
+                // Any other ERC777 `send` moves tokens exactly like a `transfer`; the data only
+                // concerns the recipient's `tokensReceived` hook.
+                return Ok((
+                    Self::WithdrawToken(
+                        send.recipient.0.0.into(),
+                        HoprBalance::from_be_bytes(send.amount.to_be_bytes::<32>()),
+                        if module_call { Payer::Safe } else { Payer::Eoa },
+                    ),
+                    signer,
+                ));
             }
 
             let transfer = transferCall::abi_decode(input.as_ref())
@@ -766,6 +773,48 @@ mod tests {
             )
         );
         assert_eq!(signer, cp.public().to_address());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_token_safe_action_should_decode() -> anyhow::Result<()> {
+        let cp = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+
+        for (tx, payer) in
+            [
+                (
+                    BasicPayloadGenerator::new(cp.public().to_address(), *CONTRACT_ADDRS).send(
+                        [2u8; Address::SIZE].into(),
+                        123_u32.into(),
+                        &[0xab; 70],
+                    )?,
+                    Payer::Eoa,
+                ),
+                (
+                    SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into())
+                        .send([2u8; Address::SIZE].into(), 123_u32.into(), &[0xab; 70])?,
+                    Payer::Safe,
+                ),
+            ]
+        {
+            let signed_tx = tx.sign_and_encode_to_eip2718(1, 1, None, &cp).await?;
+            let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+                &signed_tx,
+                &[1u8; Address::SIZE].into(),
+                &CONTRACT_ADDRS,
+            )?;
+            // A `send` to anything but the announcements contract moves tokens like a `transfer`.
+            assert_eq!(
+                action,
+                ParsedHoprChainAction::WithdrawToken(
+                    [2u8; Address::SIZE].into(),
+                    123_u32.into(),
+                    payer
+                )
+            );
+            assert_eq!(signer, cp.public().to_address());
+        }
 
         Ok(())
     }

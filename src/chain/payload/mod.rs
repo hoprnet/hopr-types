@@ -95,6 +95,14 @@ pub trait PayloadGenerator {
         amount: Balance<C>,
     ) -> Result<Self::TxRequest>;
 
+    /// Create an ERC777 send transaction payload, which passes `data` to the recipient's `tokensReceived` hook.
+    fn send(
+        &self,
+        destination: Address,
+        amount: HoprBalance,
+        data: &[u8],
+    ) -> Result<Self::TxRequest>;
+
     /// Creates the transaction payload to announce a node on-chain.
     fn announce(
         &self,

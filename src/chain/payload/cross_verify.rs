@@ -200,6 +200,45 @@ async fn withdraw_safe() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Not a multiple of 32 bytes, so the ABI padding of the `bytes` tail is exercised.
+const SEND_DATA: [u8; 70] = [0xab; 70];
+
+#[tokio::test]
+async fn send_basic() -> anyhow::Result<()> {
+    let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
+
+    let (b_gen, s_gen) = basic_gens(&key_alice);
+
+    assert_signed_eq!(
+        "send_basic",
+        b_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        s_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        1,
+        1,
+        &key_alice
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn send_safe() -> anyhow::Result<()> {
+    let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+    let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
+
+    let (b_gen, s_gen) = safe_gens(&key_alice);
+
+    assert_signed_eq!(
+        "send_safe",
+        b_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        s_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        2,
+        1,
+        &key_alice
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn fund_channel() -> anyhow::Result<()> {
     let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;

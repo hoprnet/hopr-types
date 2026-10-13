@@ -280,6 +280,24 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(tx)
     }
 
+    fn send(
+        &self,
+        destination: Address,
+        amount: HoprBalance,
+        data: &[u8],
+    ) -> payload::Result<Self::TxRequest> {
+        let call_data = sendCall {
+            recipient: a2al(destination),
+            amount: U256::from_be_slice(&amount.amount().to_be_bytes()),
+            data: data.to_vec().into(),
+        }
+        .abi_encode();
+
+        Ok(TransactionRequest::default()
+            .with_input(call_data)
+            .with_to(self.contract_addrs.token))
+    }
+
     fn announce(
         &self,
         announcement: AnnouncementData,
@@ -601,6 +619,29 @@ impl PayloadGenerator for SafePayloadGenerator {
             .with_gas_limit(DEFAULT_TX_GAS);
 
         Ok(tx)
+    }
+
+    fn send(
+        &self,
+        destination: Address,
+        amount: HoprBalance,
+        data: &[u8],
+    ) -> payload::Result<Self::TxRequest> {
+        let call_data = sendCall {
+            recipient: a2al(destination),
+            amount: U256::from_be_slice(&amount.amount().to_be_bytes()),
+            data: data.to_vec().into(),
+        }
+        .abi_encode();
+
+        Ok(TransactionRequest::default()
+            .with_input(module_payload(
+                self.contract_addrs.token,
+                U256::ZERO,
+                call_data,
+            ))
+            .with_to(a2al(self.module))
+            .with_gas_limit(DEFAULT_TX_GAS))
     }
 
     fn announce(
