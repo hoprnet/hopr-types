@@ -108,6 +108,16 @@ mod tests {
 
     use super::*;
 
+    /// Pins the in-memory footprint of [`NodeId`].
+    ///
+    /// `NodeId` is `Copy` and appears in `RoutingOptions`, `DestinationRouting` and the session
+    /// manager, so its size propagates widely. Both variants are now plain byte arrays, so the
+    /// enum is byte-aligned and costs only its discriminant over the larger variant.
+    #[test]
+    fn node_id_has_expected_memory_footprint() {
+        assert_eq!(33, size_of::<NodeId>());
+    }
+
     #[test]
     fn test_node_id_display_from_str() -> anyhow::Result<()> {
         let offchain = *OffchainKeypair::random().public();
