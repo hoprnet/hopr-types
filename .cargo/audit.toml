@@ -1,10 +1,9 @@
 [advisories]
 ignore = [
-  "RUSTSEC-2024-0388", # derivative; transitive macro dependency
-  "RUSTSEC-2024-0436", # paste; transitive macro dependency
-  "RUSTSEC-2026-0173", # proc-macro-error2; via aquamarine and alloy
-  "RUSTSEC-2026-0249", # smartstring; transitive dependency
-  "RUSTSEC-2026-0386", # tokio; transitive async runtime dependency
-  "RUSTSEC-2026-0385", # ctutils; transitive through the cryptography stack
-  "RUSTSEC-2026-0387", # crypto-bigint 0.5.x; transitive through k256/elliptic-curve
+  "RUSTSEC-2024-0388", # `derivative` unmaintained; pulled by ark-ff 0.3/0.4 -> ruint -> alloy (via hopr-bindings) [unmaintained]
+  "RUSTSEC-2024-0436", # `paste` unmaintained; proc-macro pulled by ark-ff 0.5 -> ark-bn254 -> taceo-ark-babyjubjub -> babyjubjub-ec [unmaintained]
+  "RUSTSEC-2026-0173", # `proc-macro-error2` unmaintained; pulled by aquamarine (docs macro) and alloy; drop once both move off it [unmaintained]
+  "RUSTSEC-2026-0249", # `smartstring` unmaintained, requires `opentelemetry-prometheus-text-exporter` > 0.3.0 [unmaintained]
+  "RUSTSEC-2026-0385", # `ctutils` non-constant-time mask generation; transitive through crypto-bigint 0.7 -> elliptic-curve 0.14 (k256 0.14, babyjubjub-ec); Cargo.lock already at patched 0.4.6, drop once confirmed
+  "RUSTSEC-2026-0387", # `crypto-bigint` 0.5.5 timing variability, pulled by elliptic-curve 0.13.8 -> alloy-signer (via hopr-bindings); fix needs elliptic-curve 0.14.x / k256 0.14.x in alloy — needs an alloy bump
 ]
