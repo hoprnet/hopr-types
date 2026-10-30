@@ -40,6 +40,37 @@ pub use bindings_based::{BasicPayloadGenerator, SafePayloadGenerator, Transactio
 
 type Result<T> = std::result::Result<T, crate::chain::errors::ChainTypesError>;
 
+/// A Curvy note as `CurvyAggregatorAlphaV2.directShield` takes it:
+/// `(uint256 ownerHash, uint256 token, uint256 amount, uint256[2] ephemeralKey, uint16 viewTag)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CurvyNote {
+    pub owner_hash: U256,
+    pub token: U256,
+    pub amount: U256,
+    pub ephemeral_key: [U256; 2],
+    pub view_tag: u16,
+}
+
+/// Data for the `tokensReceived` hook of a Curvy contract.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CurvyErc777Payload {
+    /// `abi.encode(address aggregator, Note note)` for the Curvy shield router, whose
+    /// `tokensReceived` hook calls `aggregator.directShield(note)` with the tokens it received.
+    DirectShield {
+        aggregator: Address,
+        note: CurvyNote,
+    },
+}
+
+/// Data an ERC777 `send` passes to the recipient's `tokensReceived` hook.
+///
+/// Only well-defined payloads can be sent, so a payload generator encodes them itself rather
+/// than taking raw bytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Erc777Payload {
+    Curvy(CurvyErc777Payload),
+}
+
 /// Estimated gas parameters for a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GasEstimation {
@@ -95,12 +126,13 @@ pub trait PayloadGenerator {
         amount: Balance<C>,
     ) -> Result<Self::TxRequest>;
 
-    /// Create an ERC777 send transaction payload, which passes `data` to the recipient's `tokensReceived` hook.
-    fn send(
+    /// Creates an ERC777 `send` transaction payload: `amount` tokens to `recipient`, with
+    /// `payload` ABI-encoded as the data for the recipient's `tokensReceived` hook.
+    fn send_erc777(
         &self,
-        destination: Address,
+        recipient: Address,
         amount: HoprBalance,
-        data: &[u8],
+        payload: &Erc777Payload,
     ) -> Result<Self::TxRequest>;
 
     /// Creates the transaction payload to announce a node on-chain.

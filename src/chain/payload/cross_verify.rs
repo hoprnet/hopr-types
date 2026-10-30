@@ -17,7 +17,10 @@ use hopr_bindings::{
 use crate::chain::payload::tests::{
     CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
 };
-use crate::chain::payload::{PayloadGenerator, SignableTransaction, bindings_based, static_based};
+use crate::chain::payload::{
+    CurvyErc777Payload, CurvyNote, Erc777Payload, PayloadGenerator, SignableTransaction,
+    bindings_based, static_based,
+};
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
 use crate::internal::tickets::REDEEM_CALL_SELECTOR;
@@ -200,20 +203,34 @@ async fn withdraw_safe() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Not a multiple of 32 bytes, so the ABI padding of the `bytes` tail is exercised.
-const SEND_DATA: [u8; 70] = [0xab; 70];
+/// A Curvy direct shield with full-width words, so no field can pass by being zero-padded alike.
+fn direct_shield() -> Erc777Payload {
+    Erc777Payload::Curvy(CurvyErc777Payload::DirectShield {
+        aggregator: [0xcc; Address::SIZE].into(),
+        note: CurvyNote {
+            owner_hash: U256::from_big_endian(&[0x11; 32]),
+            token: U256::from_big_endian(&[0x22; 32]),
+            amount: U256::from_big_endian(&[0x33; 32]),
+            ephemeral_key: [
+                U256::from_big_endian(&[0x44; 32]),
+                U256::from_big_endian(&[0x55; 32]),
+            ],
+            view_tag: 0xabcd,
+        },
+    })
+}
 
 #[tokio::test]
-async fn send_basic() -> anyhow::Result<()> {
+async fn send_erc777_basic() -> anyhow::Result<()> {
     let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
 
     let (b_gen, s_gen) = basic_gens(&key_alice);
 
     assert_signed_eq!(
-        "send_basic",
-        b_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
-        s_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        "send_erc777_basic",
+        b_gen.send_erc777((&key_bob).into(), HoprBalance::from(100), &direct_shield())?,
+        s_gen.send_erc777((&key_bob).into(), HoprBalance::from(100), &direct_shield())?,
         1,
         1,
         &key_alice
@@ -222,16 +239,16 @@ async fn send_basic() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn send_safe() -> anyhow::Result<()> {
+async fn send_erc777_safe() -> anyhow::Result<()> {
     let key_alice = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
     let key_bob = ChainKeypair::from_secret(&PRIVATE_KEY_2)?;
 
     let (b_gen, s_gen) = safe_gens(&key_alice);
 
     assert_signed_eq!(
-        "send_safe",
-        b_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
-        s_gen.send((&key_bob).into(), HoprBalance::from(100), &SEND_DATA)?,
+        "send_erc777_safe",
+        b_gen.send_erc777((&key_bob).into(), HoprBalance::from(100), &direct_shield())?,
+        s_gen.send_erc777((&key_bob).into(), HoprBalance::from(100), &direct_shield())?,
         2,
         1,
         &key_alice

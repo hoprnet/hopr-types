@@ -48,7 +48,9 @@ use crate::chain::{
         ChainTypesError::{InvalidArguments, InvalidState, SigningError},
     },
     payload,
-    payload::{GasEstimation, PayloadGenerator, SignableTransaction},
+    payload::{
+        CurvyErc777Payload, Erc777Payload, GasEstimation, PayloadGenerator, SignableTransaction,
+    },
 };
 
 #[inline]
@@ -90,6 +92,35 @@ enum Operation {
 
 sol! {
     function multiSend(bytes transactions);
+}
+
+sol! {
+    /// `CurvyTypes.Note`, as `CurvyAggregatorAlphaV2.directShield` takes it.
+    struct CurvyNote {
+        uint256 ownerHash;
+        uint256 token;
+        uint256 amount;
+        uint256[2] ephemeralKey;
+        uint16 viewTag;
+    }
+}
+
+/// The `tokensReceived` data of an ERC777 `send`.
+fn encode_erc777_payload(payload: &Erc777Payload) -> Vec<u8> {
+    let word = |value: crate::primitive::prelude::U256| U256::from_be_slice(&value.to_be_bytes());
+    match payload {
+        Erc777Payload::Curvy(CurvyErc777Payload::DirectShield { aggregator, note }) => {
+            let note = CurvyNote {
+                ownerHash: word(note.owner_hash),
+                token: word(note.token),
+                amount: word(note.amount),
+                ephemeralKey: [word(note.ephemeral_key[0]), word(note.ephemeral_key[1])],
+                viewTag: note.view_tag,
+            };
+            // `abi.encode(aggregator, note)`
+            (a2al(*aggregator), note).abi_encode_params()
+        }
+    }
 }
 
 const SAFE_MULTI_SEND_ADDRESS: alloy::primitives::Address =
@@ -280,16 +311,16 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(tx)
     }
 
-    fn send(
+    fn send_erc777(
         &self,
-        destination: Address,
+        recipient: Address,
         amount: HoprBalance,
-        data: &[u8],
+        payload: &Erc777Payload,
     ) -> payload::Result<Self::TxRequest> {
         let call_data = sendCall {
-            recipient: a2al(destination),
+            recipient: a2al(recipient),
             amount: U256::from_be_slice(&amount.amount().to_be_bytes()),
-            data: data.to_vec().into(),
+            data: encode_erc777_payload(payload).into(),
         }
         .abi_encode();
 
@@ -621,16 +652,16 @@ impl PayloadGenerator for SafePayloadGenerator {
         Ok(tx)
     }
 
-    fn send(
+    fn send_erc777(
         &self,
-        destination: Address,
+        recipient: Address,
         amount: HoprBalance,
-        data: &[u8],
+        payload: &Erc777Payload,
     ) -> payload::Result<Self::TxRequest> {
         let call_data = sendCall {
-            recipient: a2al(destination),
+            recipient: a2al(recipient),
             amount: U256::from_be_slice(&amount.amount().to_be_bytes()),
-            data: data.to_vec().into(),
+            data: encode_erc777_payload(payload).into(),
         }
         .abi_encode();
 

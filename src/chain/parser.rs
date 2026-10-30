@@ -350,7 +350,8 @@ mod tests {
     use super::*;
     use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2};
     use crate::chain::payload::{
-        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
+        BasicPayloadGenerator, CurvyErc777Payload, CurvyNote, Erc777Payload, PayloadGenerator,
+        SafePayloadGenerator, SignableTransaction,
     };
 
     lazy_static::lazy_static! {
@@ -781,19 +782,26 @@ mod tests {
     async fn send_token_action_should_decode_as_withdraw() -> anyhow::Result<()> {
         let cp = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
 
+        let payload = Erc777Payload::Curvy(CurvyErc777Payload::DirectShield {
+            aggregator: [3u8; Address::SIZE].into(),
+            note: CurvyNote {
+                owner_hash: 1.into(),
+                token: 2.into(),
+                amount: 123.into(),
+                ephemeral_key: [4.into(), 5.into()],
+                view_tag: 6,
+            },
+        });
         for (tx, payer) in
             [
                 (
-                    BasicPayloadGenerator::new(cp.public().to_address(), *CONTRACT_ADDRS).send(
-                        [2u8; Address::SIZE].into(),
-                        123_u32.into(),
-                        &[0xab; 70],
-                    )?,
+                    BasicPayloadGenerator::new(cp.public().to_address(), *CONTRACT_ADDRS)
+                        .send_erc777([2u8; Address::SIZE].into(), 123_u32.into(), &payload)?,
                     Payer::Eoa,
                 ),
                 (
                     SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into())
-                        .send([2u8; Address::SIZE].into(), 123_u32.into(), &[0xab; 70])?,
+                        .send_erc777([2u8; Address::SIZE].into(), 123_u32.into(), &payload)?,
                     Payer::Safe,
                 ),
             ]
