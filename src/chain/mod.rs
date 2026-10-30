@@ -22,7 +22,10 @@ pub mod prelude {
     pub use super::{
         ContractAddresses,
         chain_events::ChainEvent,
-        payload::{GasEstimation, PayloadGenerator, SignableTransaction},
+        payload::{
+            CurvyErc777Payload, CurvyNote, Erc777Payload, GasEstimation, PayloadGenerator,
+            SignableTransaction,
+        },
     };
 }
 
