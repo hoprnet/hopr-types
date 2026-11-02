@@ -97,6 +97,33 @@ pub fn offchain_signature_bench(c: &mut Criterion) {
             BatchSize::SmallInput,
         );
     });
+
+    // The production shape: acknowledgements arrive batched per peer, so one key is repeated
+    // across the whole batch. See `verify_expected_acknowledgements` in
+    // `hoprnet:protocols/pix/src/ack_verify.rs`. The multi-key benchmark above stays as the
+    // no-regression guard for the case where per-key work cannot be amortised.
+    group.bench_function("offchain_signature_verify_batch_single_peer", |b| {
+        let msgs = (0..BATCH_SIZE)
+            .map(|i| format!("test_msg_{i}").as_bytes().to_vec())
+            .collect::<Vec<_>>();
+
+        let kp = OffchainKeypair::random();
+
+        let tuples = (0..BATCH_SIZE)
+            .map(|i| {
+                let sig = OffchainSignature::sign_message(&msgs[i], &kp);
+                ((msgs[i].clone(), sig), *kp.public())
+            })
+            .collect::<Vec<_>>();
+
+        b.iter_batched(
+            || tuples.clone(),
+            OffchainSignature::verify_batch,
+            BatchSize::SmallInput,
+        );
+    });
+
+    group.finish();
 }
 
 criterion_group!(benches, chain_signature_bench, offchain_signature_bench);
