@@ -306,11 +306,18 @@ impl ParsedHoprChainAction {
                         },
                         signer,
                     ));
-                } else {
-                    Err(ChainTypesError::ParseError(anyhow::anyhow!(
-                        "token send transaction transaction has invalid type"
-                    )))?
                 }
+
+                // Any other ERC777 `send` moves tokens exactly like a `transfer`; the data only
+                // concerns the recipient's `tokensReceived` hook.
+                return Ok((
+                    Self::WithdrawToken(
+                        send.recipient.0.0.into(),
+                        HoprBalance::from_be_bytes(send.amount.to_be_bytes::<32>()),
+                        if module_call { Payer::Safe } else { Payer::Eoa },
+                    ),
+                    signer,
+                ));
             }
 
             if let Ok(approve) = approveCall::abi_decode(input.as_ref()) {
@@ -358,7 +365,8 @@ mod tests {
     use super::*;
     use crate::chain::payload::tests::{CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2};
     use crate::chain::payload::{
-        BasicPayloadGenerator, PayloadGenerator, SafePayloadGenerator, SignableTransaction,
+        BasicPayloadGenerator, CurvyErc777Payload, CurvyNote, Erc777Payload, PayloadGenerator,
+        SafePayloadGenerator, SignableTransaction,
     };
 
     lazy_static::lazy_static! {
@@ -781,6 +789,54 @@ mod tests {
             )
         );
         assert_eq!(signer, cp.public().to_address());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_token_action_should_decode_as_withdraw() -> anyhow::Result<()> {
+        let cp = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+
+        let payload = Erc777Payload::Curvy(CurvyErc777Payload::DirectShield {
+            aggregator: [3u8; Address::SIZE].into(),
+            note: CurvyNote {
+                owner_hash: 1.into(),
+                token: 2.into(),
+                amount: 123.into(),
+                ephemeral_key: [4.into(), 5.into()],
+                view_tag: 6,
+            },
+        });
+        for (tx, payer) in
+            [
+                (
+                    BasicPayloadGenerator::new(cp.public().to_address(), *CONTRACT_ADDRS)
+                        .send_erc777([2u8; Address::SIZE].into(), 123_u32.into(), &payload)?,
+                    Payer::Eoa,
+                ),
+                (
+                    SafePayloadGenerator::new(&cp, *CONTRACT_ADDRS, [1u8; Address::SIZE].into())
+                        .send_erc777([2u8; Address::SIZE].into(), 123_u32.into(), &payload)?,
+                    Payer::Safe,
+                ),
+            ]
+        {
+            let signed_tx = tx.sign_and_encode_to_eip2718(1, 1, None, &cp).await?;
+            let (action, signer) = ParsedHoprChainAction::parse_from_eip2718(
+                &signed_tx,
+                &[1u8; Address::SIZE].into(),
+                &CONTRACT_ADDRS,
+            )?;
+            assert_eq!(
+                action,
+                ParsedHoprChainAction::WithdrawToken(
+                    [2u8; Address::SIZE].into(),
+                    123_u32.into(),
+                    payer
+                )
+            );
+            assert_eq!(signer, cp.public().to_address());
+        }
 
         Ok(())
     }

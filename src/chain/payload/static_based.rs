@@ -16,7 +16,10 @@ use sha3::{Digest, Keccak256};
 use crate::chain::{
     ContractAddresses,
     errors::ChainTypesError::{InvalidArguments, InvalidState, SigningError},
-    payload::{self, GasEstimation, PayloadGenerator, SignableTransaction},
+    payload::{
+        self, CurvyErc777Payload, Erc777Payload, GasEstimation, PayloadGenerator,
+        SignableTransaction,
+    },
 };
 use crate::crypto::prelude::*;
 use crate::internal::prelude::*;
@@ -151,6 +154,29 @@ fn encode_transfer(recipient: [u8; 20], amount: &[u8; 32]) -> Vec<u8> {
 
 fn encode_send(recipient: [u8; 20], amount: &[u8; 32], data: &[u8]) -> Vec<u8> {
     call_with_bytes(selectors::SEND, &[addr32(recipient), *amount], data)
+}
+
+/// The `tokensReceived` data of an ERC777 `send`.
+fn encode_erc777_payload(payload: &Erc777Payload) -> Vec<u8> {
+    match payload {
+        Erc777Payload::Curvy(CurvyErc777Payload::DirectShield { aggregator, note }) => {
+            // `abi.encode(address, (uint256,uint256,uint256,uint256[2],uint16))`: every member
+            // is static, so this is seven words with no offsets.
+            let mut out = Vec::with_capacity(7 * 32);
+            out.extend_from_slice(&addr32((*aggregator).into()));
+            for word in [
+                note.owner_hash,
+                note.token,
+                note.amount,
+                note.ephemeral_key[0],
+                note.ephemeral_key[1],
+            ] {
+                out.extend_from_slice(&word.to_be_bytes());
+            }
+            out.extend_from_slice(&right_align32(&note.view_tag.to_be_bytes()));
+            out
+        }
+    }
 }
 
 fn encode_register_safe_by_node(safe_addr: [u8; 20]) -> Vec<u8> {
@@ -652,6 +678,19 @@ impl PayloadGenerator for BasicPayloadGenerator {
         Ok(transfer_tx(destination, amount)?.with_to(to))
     }
 
+    fn send_erc777(
+        &self,
+        recipient: Address,
+        amount: HoprBalance,
+        payload: &Erc777Payload,
+    ) -> payload::Result<Self::TxRequest> {
+        let amount_word = amount.amount().to_be_bytes();
+        let data = encode_erc777_payload(payload);
+        Ok(TransactionRequest::default()
+            .with_input(encode_send(recipient.into(), &amount_word, &data))
+            .with_to(self.contract_addrs.token.into()))
+    }
+
     fn announce(
         &self,
         announcement: AnnouncementData,
@@ -875,6 +914,18 @@ impl PayloadGenerator for SafePayloadGenerator {
         Ok(self.module_exec_tx(to, &value, &call_data))
     }
 
+    fn send_erc777(
+        &self,
+        recipient: Address,
+        amount: HoprBalance,
+        payload: &Erc777Payload,
+    ) -> payload::Result<Self::TxRequest> {
+        let amount_word = amount.amount().to_be_bytes();
+        let data = encode_erc777_payload(payload);
+        let call_data = encode_send(recipient.into(), &amount_word, &data);
+        Ok(self.module_exec_tx(self.contract_addrs.token.into(), &[0u8; 32], &call_data))
+    }
+
     fn announce(
         &self,
         announcement: AnnouncementData,
@@ -1038,7 +1089,9 @@ mod tests {
     use crate::chain::payload::tests::{
         CONTRACT_ADDRS_JSON, PRIVATE_KEY_1, PRIVATE_KEY_2, REDEEMABLE_TICKET,
     };
-    use crate::chain::payload::{PayloadGenerator, SignableTransaction};
+    use crate::chain::payload::{
+        CurvyErc777Payload, CurvyNote, Erc777Payload, PayloadGenerator, SignableTransaction,
+    };
     use crate::crypto::prelude::*;
     use crate::internal::prelude::*;
     use crate::primitive::prelude::*;
@@ -1124,6 +1177,75 @@ mod tests {
             .await?;
         insta::assert_snapshot!("withdraw_safe", const_hex::encode(signed_tx));
 
+        Ok(())
+    }
+
+    /// `execTransactionFromModule(token, 0, send(recipient, 1000, data), Call)` with the 224
+    /// bytes of a Curvy direct shield as `data`, hand-built from the ABI and independent of both
+    /// generators, so this checks the encoding rather than pinning whatever the generators
+    /// currently produce.
+    const ROUTED_SHIELD_MODULE_CALL: &str = concat!(
+        "468721a7000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000",
+        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "00000000000000000000000000000000000001649bd9bbc6000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000003e80000000000000000",
+        "000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000",
+        "00000000000000e0000000000000000000000000cccccccccccccccccccccccccccccccccccccccc0000000000000000",
+        "000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000",
+        "000000000000000200000000000000000000000000000000000000000000000000000000000003e80000000000000000",
+        "000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000",
+        "000000000000000500000000000000000000000000000000000000000000000000000000000000060000000000000000",
+        "0000000000000000000000000000000000000000",
+    );
+
+    /// The direct shield of the note `(1, 2, 1000, [4, 5], 6)` through aggregator `0xcc…`, whose
+    /// `abi.encode(address aggregator, Note note)` is the vector's 224 bytes of data.
+    fn direct_shield() -> Erc777Payload {
+        Erc777Payload::Curvy(CurvyErc777Payload::DirectShield {
+            aggregator: [0xcc; Address::SIZE].into(),
+            note: CurvyNote {
+                owner_hash: 1.into(),
+                token: 2.into(),
+                amount: 1000.into(),
+                ephemeral_key: [4.into(), 5.into()],
+                view_tag: 6,
+            },
+        })
+    }
+
+    #[test]
+    fn send_erc777_matches_the_reference_encoding() -> anyhow::Result<()> {
+        let key = ChainKeypair::from_secret(&PRIVATE_KEY_1)?;
+        let addrs = crate::chain::ContractAddresses {
+            token: [0xaa; Address::SIZE].into(),
+            ..*CONTRACT_ADDRS
+        };
+        let router: Address = [0xbb; Address::SIZE].into();
+        let module: Address = [0xdd; Address::SIZE].into();
+
+        let safe = SafePayloadGenerator::new(&key, addrs, module).send_erc777(
+            router,
+            HoprBalance::from(1000),
+            &direct_shield(),
+        )?;
+        assert_eq!(const_hex::encode(&safe.input), ROUTED_SHIELD_MODULE_CALL);
+        assert_eq!(safe.to, Some(module.into()));
+
+        // The plain `send` is the bytes the module forwards to the token: after the module head
+        // (selector and five words) and before the padding the module call adds to its 0x164-byte
+        // `data` argument.
+        let inner = (4 + 5 * 32) * 2..(4 + 5 * 32 + 0x164) * 2;
+        let basic = BasicPayloadGenerator::new((&key).into(), addrs).send_erc777(
+            router,
+            HoprBalance::from(1000),
+            &direct_shield(),
+        )?;
+        assert_eq!(
+            const_hex::encode(&basic.input),
+            &ROUTED_SHIELD_MODULE_CALL[inner]
+        );
+        assert_eq!(basic.to, Some([0xaa; Address::SIZE]));
         Ok(())
     }
 }
