@@ -60,7 +60,19 @@ in
     }).overrideAttrs
       (_: {
         checkPhase = ''
-          cargo nextest run --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast
+          cargo nextest run --workspace ${allFeaturesWithFixedRng} --no-fail-fast
+        '';
+      });
+
+  # nextest does not run doctests
+  test-doc =
+    (buildLib builders.local {
+      runTests = true;
+      cargoExtraArgs = allFeaturesWithFixedRng;
+    }).overrideAttrs
+      (_: {
+        checkPhase = ''
+          cargo test --doc --workspace ${allFeaturesWithFixedRng}
         '';
       });
 
@@ -76,7 +88,7 @@ in
       (_: {
         checkPhase = ''
           mkdir -p $out
-          cargo llvm-cov nextest --workspace --lib ${allFeaturesWithFixedRng} --no-fail-fast --lcov --output-path $out/coverage.lcov
+          cargo llvm-cov nextest --workspace ${allFeaturesWithFixedRng} --no-fail-fast --lcov --output-path $out/coverage.lcov
         '';
         installPhase = "true";
       });

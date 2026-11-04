@@ -269,7 +269,7 @@
           };
 
           checks = {
-            inherit (hoprTypesPackages) clippy;
+            inherit (hoprTypesPackages) clippy test-doc;
             inherit pre-commit-check;
           };
 
@@ -332,6 +332,7 @@
           packages = {
             inherit (hoprTypesPackages)
               test
+              test-doc
               coverage-unit
               lib-hopr-types
               bench-build
