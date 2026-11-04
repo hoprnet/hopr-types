@@ -52,6 +52,15 @@ in
     cargoExtraArgs = allFeatures;
   };
 
+  doc = buildLib builders.local {
+    runDoc = true;
+    cargoExtraArgs = allFeatures;
+  };
+
+  deny = buildLib builders.local {
+    runDeny = true;
+  };
+
   test =
     (buildLib builders.local {
       runTests = true;

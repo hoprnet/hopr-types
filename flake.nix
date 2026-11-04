@@ -9,7 +9,8 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
-    nix-lib.url = "github:hoprnet/nix-lib/v1.1.0";
+    # TODO: pin to a release tag once nix-lib#45 is released
+    nix-lib.url = "github:hoprnet/nix-lib/2da3a9bb1951f86046e6b6b8b9c5e1792d385224";
 
     # Rust build system
     crane.url = "github:ipetkov/crane";
@@ -269,7 +270,12 @@
           };
 
           checks = {
-            inherit (hoprTypesPackages) clippy test-doc;
+            inherit (hoprTypesPackages)
+              clippy
+              doc
+              deny
+              test-doc
+              ;
             inherit pre-commit-check;
           };
 
@@ -283,23 +289,7 @@
             audit = (nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; }) // {
               meta.description = "Run cargo audit to check for security vulnerabilities";
             };
-            # Needs crates.io for the baseline version, so it cannot be a sandboxed check.
-            semver-checks = {
-              type = "app";
-              program = lib.getExe (
-                pkgs.writeShellApplication {
-                  name = "semver-checks";
-                  runtimeInputs = [
-                    stableToolchain
-                    pkgsUnstable.cargo-semver-checks
-                    pkgs.pkg-config
-                    pkgs.openssl
-                  ];
-                  text = ''
-                    cargo semver-checks "$@"
-                  '';
-                }
-              );
+            semver-checks = (nixLib.mkSemverChecksApp { rustToolchain = stableToolchain; }) // {
               meta.description = "Check the public API against the last published release";
             };
             coverage = {
