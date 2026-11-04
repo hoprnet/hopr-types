@@ -195,6 +195,9 @@
               {
                 rustToolchain = stableToolchain;
                 shellName = "Development";
+                # The library build enters this shell for cargo-release; coverage
+                # tooling (cargo-llvm-cov) lives in the `coverage` shell.
+                includeQualityTools = false;
               }
               // shellArgs
             );
