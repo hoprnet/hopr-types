@@ -5,6 +5,7 @@ on:
       - closed
     branches:
       - main
+permissions: {}
 concurrency:
   group: merge-${{ github.event.pull_request.base.ref }}
   cancel-in-progress: false
@@ -27,7 +28,7 @@ jobs:
       contents: read
       id-token: write
     with:
-      source_branch: ${{ github.event.pull_request.base.ref }}
+      source_branch: ${{ github.event.pull_request.merge_commit_sha }}
       version_type: pr
       architecture: ${{ matrix.architecture }}
       package_name: hopr-types

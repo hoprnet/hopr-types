@@ -12,13 +12,14 @@ on:
           - patch
           - minor
           - major
+permissions: {}
 concurrency:
   group: release
   cancel-in-progress: false
 jobs:
   build-library:
     name: Build Library
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@fa71078959cf9f892185e8df16551720693a2cd1 # build-library OIDC trusted publishing (hoprnet/hopr-workflows#84)
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@bfdfd56e110ee356595faac1424b74906ed50ac9 # build-library-v3.3.2
     permissions:
       contents: read
       id-token: write
