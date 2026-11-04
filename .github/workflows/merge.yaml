@@ -28,7 +28,8 @@ jobs:
       contents: read
       id-token: write
     with:
-      source_branch: ${{ github.event.pull_request.merge_commit_sha }}
+      # A branch name, not a SHA: cargo release rejects a detached HEAD.
+      source_branch: ${{ github.event.pull_request.base.ref }}
       version_type: pr
       architecture: ${{ matrix.architecture }}
       package_name: hopr-types
