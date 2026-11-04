@@ -283,6 +283,25 @@
             audit = (nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; }) // {
               meta.description = "Run cargo audit to check for security vulnerabilities";
             };
+            # Needs crates.io for the baseline version, so it cannot be a sandboxed check.
+            semver-checks = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "semver-checks";
+                  runtimeInputs = [
+                    stableToolchain
+                    pkgsUnstable.cargo-semver-checks
+                    pkgs.pkg-config
+                    pkgs.openssl
+                  ];
+                  text = ''
+                    cargo semver-checks "$@"
+                  '';
+                }
+              );
+              meta.description = "Check the public API against the last published release";
+            };
             coverage-unit = {
               type = "app";
               program = toString (

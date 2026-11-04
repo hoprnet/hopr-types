@@ -67,7 +67,7 @@ impl ServiceType {
     /// Decodes the id back into its ASCII name, if it follows the right-padded ASCII convention.
     ///
     /// Returns `None` for any id that does not: one holding non-ASCII bytes, an interior NUL
-    /// byte, or a character outside the printable, non-space range accepted by [`FromStr`].
+    /// byte, or a character outside the printable, non-space range accepted by [`FromStr`](std::str::FromStr).
     pub fn as_ascii(&self) -> Option<&str> {
         let len = self.0.iter().rposition(|b| *b != 0)? + 1;
         let name = std::str::from_utf8(&self.0[..len]).ok()?;
