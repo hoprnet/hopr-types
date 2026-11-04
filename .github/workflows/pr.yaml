@@ -72,20 +72,59 @@ jobs:
           if [[ "$HEAD_REPO" != "$BASE_REPO" ]]; then
             gh pr edit "$PR_NUMBER" --add-label "external"
           fi
+  # Gate jobs through inputs on the reusable workflows, not with a caller-level
+  # `if:`: an input-skipped inner job still reports its required check name as
+  # skipped (green), a skipped caller job does not. Merge-queue runs always
+  # run everything.
+  changes:
+    name: Detect changes
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      lockfile: ${{ github.event_name != 'pull_request' || steps.filter.outputs.lockfile == 'true' }}
+    steps:
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            rust:
+              - "src/**"
+              - "benches/**"
+              - "build.rs"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "rust-toolchain.toml"
+              - ".cargo/**"
+              - "flake.nix"
+              - "flake.lock"
+              - "nix/**"
+            lockfile:
+              - "Cargo.toml"
+              - "Cargo.lock"
   checks:
     name: Check
+    needs: changes
     uses: hoprnet/hopr-workflows/.github/workflows/checks.yaml@1476429c0d8c5a6331c50a4655501125051cdbf4 # workflow-checks-v2
     with:
       source_branch: ${{ github.event.pull_request.head.sha || github.sha }}
       lint_command: "nix run -L .#check"
       audit_command: "nix run .#audit"
       deps: false
+      # Format and pre-commit cover every file type and always run.
+      lint: ${{ needs.changes.outputs.rust == 'true' }}
+      audit: ${{ needs.changes.outputs.lockfile == 'true' }}
       runner_small: depot-ubuntu-24.04
       runner_large: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   tests:
     name: Test
+    needs: changes
     uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
     permissions:
       contents: read
@@ -94,13 +133,14 @@ jobs:
       source_branch: ${{ github.event.pull_request.head.sha || github.sha }}
       # Coverage runs the unit tests, so the plain test job is redundant.
       enable_unit_tests: false
-      enable_unit_coverage: true
+      enable_unit_coverage: ${{ needs.changes.outputs.rust == 'true' }}
       unit_coverage_command: "nix run .#coverage-unit"
       runner_unit: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   build-library:
     name: Library ${{ matrix.architecture }}
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
@@ -124,13 +164,13 @@ jobs:
       architecture: ${{ matrix.architecture }}
       package_name: hopr-types
       runner: ${{ matrix.runner }}
-      enabled: ${{ matrix.required_label == '' || github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, matrix.required_label) }}
+      enabled: ${{ needs.changes.outputs.rust == 'true' && (matrix.required_label == '' || github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, matrix.required_label)) }}
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
   benchmarks:
     name: Benchmarks
-    needs: [checks, tests, build-library]
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [changes, checks, tests, build-library]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true' && github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       checks: write
