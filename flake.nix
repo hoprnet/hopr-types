@@ -27,6 +27,13 @@
     nix-lib.inputs.crane.follows = "crane";
     nix-lib.inputs.rust-overlay.follows = "rust-overlay";
     nix-lib.inputs.flake-utils.follows = "flake-utils";
+    # One unstable/treefmt/flake-parts revision for the whole flake. Left
+    # unfollowed, `nix flake update nix-lib` moves nix-lib's private nixpkgs-unstable,
+    # which supplies cargo-llvm-cov to the dev shell, to a revision missing from the
+    # binary cache.
+    nix-lib.inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
+    nix-lib.inputs.treefmt-nix.follows = "treefmt-nix";
+    nix-lib.inputs.flake-parts.follows = "flake-parts";
     pre-commit.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -195,9 +202,6 @@
               {
                 rustToolchain = stableToolchain;
                 shellName = "Development";
-                # The library build enters this shell for cargo-release; coverage
-                # tooling (cargo-llvm-cov) lives in the `coverage` shell.
-                includeQualityTools = false;
               }
               // shellArgs
             );
