@@ -76,7 +76,7 @@ in
         '';
       });
 
-  coverage-unit =
+  coverage =
     (buildLib builders.localCoverage {
       runTests = true;
       cargoExtraArgs = allFeaturesWithFixedRng;

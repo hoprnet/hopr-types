@@ -302,12 +302,12 @@
               );
               meta.description = "Check the public API against the last published release";
             };
-            coverage-unit = {
+            coverage = {
               type = "app";
               program = toString (
-                pkgs.writeShellScript "coverage-unit" ''
+                pkgs.writeShellScript "coverage" ''
                   set -euo pipefail
-                  nix build -L .#coverage-unit
+                  nix build -L .#coverage
                   cp result/coverage.lcov coverage.lcov
                   echo "Coverage report written to coverage.lcov"
                 ''
@@ -333,7 +333,7 @@
             inherit (hoprTypesPackages)
               test
               test-doc
-              coverage-unit
+              coverage
               lib-hopr-types
               bench-build
               ;

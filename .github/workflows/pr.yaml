@@ -134,7 +134,7 @@ jobs:
       # Coverage runs the unit tests, so the plain test job is redundant.
       enable_unit_tests: false
       enable_unit_coverage: ${{ needs.changes.outputs.rust == 'true' }}
-      unit_coverage_command: "nix run .#coverage-unit"
+      unit_coverage_command: "nix run .#coverage"
       runner_unit: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
