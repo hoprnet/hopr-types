@@ -28,6 +28,7 @@ jobs:
       version_type: release
       architecture: x86_64-linux
       package_name: hopr-types
+      build_command: "nix build -L .#lib-hopr-types-x86_64-linux"
       runner: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}

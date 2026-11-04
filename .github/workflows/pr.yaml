@@ -154,7 +154,7 @@ jobs:
           - architecture: aarch64-darwin
             runner: depot-macos-15
             required_label: "binary:aarch64-darwin"
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@475421441ff5747c2233ebe58cdff355c8b40356 # build-library-v3.1.3
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@bfdfd56e110ee356595faac1424b74906ed50ac9 # build-library-v3.3.2
     permissions:
       contents: read
       id-token: write
@@ -163,6 +163,8 @@ jobs:
       version_type: commit
       architecture: ${{ matrix.architecture }}
       package_name: hopr-types
+      # Cached crane build; cargo release then skips the rebuild (--no-verify).
+      build_command: "nix build -L .#lib-hopr-types-${{ matrix.architecture }}"
       runner: ${{ matrix.runner }}
       enabled: ${{ needs.changes.outputs.rust == 'true' && (matrix.required_label == '' || github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, matrix.required_label)) }}
     secrets:
