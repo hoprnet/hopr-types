@@ -209,3 +209,32 @@ jobs:
       bencher_api_token: ${{ secrets.BENCHER_API_TOKEN }}
       ZULIP_API_KEY: ${{ secrets.ZULIP_API_KEY }}
       ZULIP_EMAIL: ${{ secrets.ZULIP_EMAIL }}
+  # Single aggregate merge gate: green only if every other job in this run
+  # succeeded. Mark THIS one as the required check in the branch ruleset, so
+  # adding, renaming, or removing a job never needs a ruleset change.
+  # `if: always()` runs it even when a dependency fails; alls-green then reds
+  # the gate on any non-success (a failed job, or a skip that is not allowed).
+  merge-gate:
+    name: Merge gate
+    if: always()
+    needs:
+      - validate-pr-title
+      - label
+      - changes
+      - checks
+      - tests
+      - build-library
+      - semver-checks
+      - benchmarks
+    runs-on: depot-ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require all jobs to pass
+        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
+        with:
+          jobs: ${{ toJSON(needs) }}
+          # validate-pr-title and label run on pull_request only. semver-checks
+          # and benchmarks also skip for changes outside Rust/build/Nix paths,
+          # and benchmarks for fork PRs. changes, checks, tests and
+          # build-library never skip, so a skip there reds the gate.
+          allowed-skips: "validate-pr-title, label, semver-checks, benchmarks"
