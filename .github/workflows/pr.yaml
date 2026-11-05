@@ -103,6 +103,7 @@ jobs:
               - "flake.nix"
               - "flake.lock"
               - "nix/**"
+              - "deny.toml"
               - ".github/workflows/**"
             lockfile:
               - "Cargo.toml"
