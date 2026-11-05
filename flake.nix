@@ -9,7 +9,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
-    nix-lib.url = "github:hoprnet/nix-lib/c6691ec74e6ecf3bca6a3f99978fd7618c588fa0";
+    nix-lib.url = "github:hoprnet/nix-lib/v2.1.1";
 
     # Rust build system
     crane.url = "github:ipetkov/crane";

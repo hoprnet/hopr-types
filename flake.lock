@@ -118,8 +118,8 @@
       },
       "original": {
         "owner": "hoprnet",
+        "ref": "v2.1.1",
         "repo": "nix-lib",
-        "rev": "c6691ec74e6ecf3bca6a3f99978fd7618c588fa0",
         "type": "github"
       }
     },
