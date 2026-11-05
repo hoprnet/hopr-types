@@ -25,7 +25,7 @@
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "groupName": "github-actions",
       "pinDigests": true,
       "commitMessageTopic": "GitHub Actions"
