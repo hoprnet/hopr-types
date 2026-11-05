@@ -5,20 +5,22 @@ on:
       - main
 permissions:
   contents: read
-  id-token: write # zizmor: ignore[excessive-permissions]
 concurrency:
   group: branches-${{ github.ref_name }}
   cancel-in-progress: false
 jobs:
   coverage:
     name: Coverage
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC upload
     uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
     with:
-      source_branch: ${{ github.ref_name }}
+      source_branch: ${{ github.sha }}
       enable_unit_tests: false
       enable_integration_tests: false
       enable_unit_coverage: true
-      unit_coverage_command: "nix run .#coverage-unit"
+      unit_coverage_command: "nix run .#coverage"
       runner_unit: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -45,3 +47,22 @@ jobs:
       bencher_api_token: ${{ secrets.BENCHER_API_TOKEN }}
       ZULIP_API_KEY: ${{ secrets.ZULIP_API_KEY }}
       ZULIP_EMAIL: ${{ secrets.ZULIP_EMAIL }}
+  notify:
+    name: Notify failure
+    permissions: {}
+    needs:
+      - coverage
+    if: ${{ always() && needs.coverage.result == 'failure' }}
+    runs-on: depot-ubuntu-24.04
+    steps:
+      - name: Notify failed coverage run on main
+        uses: zulip/github-actions-zulip/send-message@f675f2b4eb2a95fae974215476dcb7ad8dfeff6b # v2.0.2
+        with:
+          api-key: ${{ secrets.ZULIP_API_KEY }}
+          email: ${{ secrets.ZULIP_EMAIL }}
+          organization-url: "https://hopr.zulipchat.com"
+          type: stream
+          to: HOPRd
+          topic: main
+          content: |
+            The coverage run on main has failed: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

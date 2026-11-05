@@ -9,7 +9,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
-    nix-lib.url = "github:hoprnet/nix-lib/v1.1.0";
+    nix-lib.url = "github:hoprnet/nix-lib/v2.1.1";
 
     # Rust build system
     crane.url = "github:ipetkov/crane";
@@ -26,6 +26,13 @@
     nix-lib.inputs.crane.follows = "crane";
     nix-lib.inputs.rust-overlay.follows = "rust-overlay";
     nix-lib.inputs.flake-utils.follows = "flake-utils";
+    # One unstable/treefmt/flake-parts revision for the whole flake. Left
+    # unfollowed, `nix flake update nix-lib` moves nix-lib's private nixpkgs-unstable,
+    # which supplies cargo-llvm-cov to the dev shell, to a revision missing from the
+    # binary cache.
+    nix-lib.inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
+    nix-lib.inputs.treefmt-nix.follows = "treefmt-nix";
+    nix-lib.inputs.flake-parts.follows = "flake-parts";
     pre-commit.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -269,7 +276,12 @@
           };
 
           checks = {
-            inherit (hoprTypesPackages) clippy;
+            inherit (hoprTypesPackages)
+              clippy
+              doc
+              deny
+              test-doc
+              ;
             inherit pre-commit-check;
           };
 
@@ -283,12 +295,15 @@
             audit = (nixLib.mkAuditApp { rustToolchainFile = ./rust-toolchain.toml; }) // {
               meta.description = "Run cargo audit to check for security vulnerabilities";
             };
-            coverage-unit = {
+            semver-checks = (nixLib.mkSemverChecksApp { rustToolchain = stableToolchain; }) // {
+              meta.description = "Check the public API against the last published release";
+            };
+            coverage = {
               type = "app";
               program = toString (
-                pkgs.writeShellScript "coverage-unit" ''
+                pkgs.writeShellScript "coverage" ''
                   set -euo pipefail
-                  nix build -L .#coverage-unit
+                  nix build -L .#coverage
                   cp result/coverage.lcov coverage.lcov
                   echo "Coverage report written to coverage.lcov"
                 ''
@@ -313,7 +328,8 @@
           packages = {
             inherit (hoprTypesPackages)
               test
-              coverage-unit
+              test-doc
+              coverage
               lib-hopr-types
               bench-build
               ;

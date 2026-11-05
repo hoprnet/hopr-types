@@ -12,13 +12,14 @@ on:
           - patch
           - minor
           - major
+permissions: {}
 concurrency:
   group: release
   cancel-in-progress: false
 jobs:
   build-library:
     name: Build Library
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@fa71078959cf9f892185e8df16551720693a2cd1 # build-library OIDC trusted publishing (hoprnet/hopr-workflows#84)
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@bfdfd56e110ee356595faac1424b74906ed50ac9 # build-library-v3.3.2
     permissions:
       contents: read
       id-token: write
@@ -27,6 +28,7 @@ jobs:
       version_type: release
       architecture: x86_64-linux
       package_name: hopr-types
+      build_command: "nix build -L .#lib-hopr-types-x86_64-linux"
       runner: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
