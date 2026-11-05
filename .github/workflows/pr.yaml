@@ -75,7 +75,7 @@ jobs:
   # Gate jobs through inputs on the reusable workflows, not with a caller-level
   # `if:`: an input-skipped inner job still reports its required check name as
   # skipped (green), a skipped caller job does not. Merge-queue runs always
-  # run everything.
+  # run everything; the PR-only `semver-checks` job is the one exception.
   changes:
     name: Detect changes
     runs-on: depot-ubuntu-24.04
@@ -103,6 +103,7 @@ jobs:
               - "flake.nix"
               - "flake.lock"
               - "nix/**"
+              - ".github/workflows/**"
             lockfile:
               - "Cargo.toml"
               - "Cargo.lock"
