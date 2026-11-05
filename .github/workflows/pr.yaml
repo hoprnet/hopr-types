@@ -237,6 +237,9 @@ jobs:
           jobs: ${{ toJSON(needs) }}
           # validate-pr-title and label run on pull_request only. semver-checks
           # and benchmarks also skip for changes outside Rust/build/Nix paths,
-          # and benchmarks for fork PRs. changes, checks, tests and
-          # build-library never skip, so a skip there reds the gate.
-          allowed-skips: "validate-pr-title, label, semver-checks, benchmarks"
+          # and benchmarks for fork PRs. `tests` and `build-library` are
+          # input-gated on `changes.outputs.rust`; when every inner job of the
+          # reusable workflow skips, the caller job reports skipped as well. So
+          # their skip is allowed only for a non-Rust change; a Rust change
+          # still has to run both. A failed job reds the gate either way.
+          allowed-skips: ${{ needs.changes.outputs.rust == 'true' && 'validate-pr-title, label, semver-checks, benchmarks' || 'validate-pr-title, label, semver-checks, benchmarks, tests, build-library' }}
