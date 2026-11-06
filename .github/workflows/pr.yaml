@@ -41,8 +41,11 @@ jobs:
           ignoreLabels: |
             bot
             ignore-semantic-pull-request
+  # Best-effort: on fork PRs the GITHUB_TOKEN is read-only, so labeling fails.
+  # Keep the job in the merge gate's `needs`, but do not let that failure red it.
   label:
     name: Add labels
+    continue-on-error: true
     if: github.event_name == 'pull_request'
     runs-on: depot-ubuntu-24.04
     permissions:
