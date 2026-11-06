@@ -124,9 +124,13 @@ jobs:
       runner_large: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  # Stage 2: tests run after the stage 1 checks and semver are green. `semver-checks`
+  # skips outside pull requests, and a skipped need would skip this job too, so
+  # `!failure()` lets a skip through and still stops on a failed need.
   tests:
     name: Test
-    needs: changes
+    needs: [changes, checks, semver-checks]
+    if: ${{ !cancelled() && !failure() }}
     uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
     permissions:
       contents: read
@@ -140,9 +144,11 @@ jobs:
       runner_unit: depot-ubuntu-24.04-4
     secrets:
       cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  # Stage 3: builds run after stages 1 and 2 are green (same skip rule).
   build-library:
     name: Library ${{ matrix.architecture }}
-    needs: changes
+    needs: [changes, checks, semver-checks, tests]
+    if: ${{ !cancelled() && !failure() }}
     strategy:
       fail-fast: false
       matrix:
@@ -189,8 +195,8 @@ jobs:
           command: "nix run -L .#semver-checks"
   benchmarks:
     name: Benchmarks
-    needs: [changes, checks, tests, build-library]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [changes, checks, semver-checks, tests, build-library]
+    if: ${{ !cancelled() && !failure() && github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true' && github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: read
       checks: write
@@ -241,5 +247,6 @@ jobs:
           # input-gated on `changes.outputs.rust`; when every inner job of the
           # reusable workflow skips, the caller job reports skipped as well. So
           # their skip is allowed only for a non-Rust change; a Rust change
-          # still has to run both. A failed job reds the gate either way.
-          allowed-skips: ${{ needs.changes.outputs.rust == 'true' && 'validate-pr-title, label, semver-checks, benchmarks' || 'validate-pr-title, label, semver-checks, benchmarks, tests, build-library' }}
+          # still has to run both. Coverage skips on a draft PR, so `tests`
+          # alone may also skip there. A failed job reds the gate either way.
+          allowed-skips: ${{ format('validate-pr-title, label, semver-checks, benchmarks{0}', needs.changes.outputs.rust != 'true' && ', tests, build-library' || (github.event.pull_request.draft == true && ', tests' || '')) }}
