@@ -184,7 +184,8 @@
               export GITHUB_TOKEN="''${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}"
             '';
             extraPackages = with pkgs; [
-              cargo-release
+              # From unstable: cargo-release 1.1.7 needs rustc 1.97, release-26.05 ships 1.95.
+              pkgsUnstable.cargo-release
               sqlite
               yq-go
             ];
