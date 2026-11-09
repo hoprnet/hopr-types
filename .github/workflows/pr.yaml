@@ -21,7 +21,7 @@ jobs:
     permissions:
       pull-requests: read
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -54,7 +54,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           disable-sudo: true
           egress-policy: audit
@@ -114,7 +114,7 @@ jobs:
   checks:
     name: Check
     needs: changes
-    uses: hoprnet/hopr-workflows/.github/workflows/checks.yaml@1476429c0d8c5a6331c50a4655501125051cdbf4 # workflow-checks-v2
+    uses: hoprnet/hopr-workflows/.github/workflows/checks.yaml@061b4579c870b0fdc008f5ff07a3a500e4fede50 # workflow-checks-v2
     with:
       source_branch: ${{ github.event.pull_request.head.sha || github.sha }}
       lint_command: "nix run -L .#check"
@@ -134,7 +134,7 @@ jobs:
     name: Test
     needs: [changes, checks, semver-checks]
     if: ${{ !cancelled() && !failure() }}
-    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
+    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@f5b2ab89bc1e5a46840275389bb9acf97847576a # workflow-tests-v6
     permissions:
       contents: read
       id-token: write # Codecov OIDC upload in the coverage job
