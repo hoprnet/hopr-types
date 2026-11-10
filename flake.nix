@@ -4,16 +4,19 @@
   inputs = {
     # Core Nix ecosystem dependencies
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:NixOS/nixpkgs/release-26.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
     # HOPR Nix Library (provides flake-utils and reusable build functions)
-    nix-lib.url = "github:hoprnet/nix-lib/v2.1.1";
+    nix-lib.url = "github:hoprnet/nix-lib/v2.1.7";
+    # nix-lib anchors the heavy pins (nixpkgs, nixpkgs-unstable, rust-overlay, crane) so every
+    # hoprnet flake on the same nix-lib release shares them. To bump them, point nix-lib.url at
+    # the new release tag, then run `nix flake update nix-lib`.
+    nixpkgs.follows = "nix-lib/nixpkgs";
+    nixpkgs-unstable.follows = "nix-lib/nixpkgs-unstable";
 
     # Rust build system
-    crane.url = "github:ipetkov/crane";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    crane.follows = "nix-lib/crane";
+    rust-overlay.follows = "nix-lib/rust-overlay";
 
     # Development tools and quality assurance
     pre-commit.url = "github:cachix/git-hooks.nix";
@@ -22,19 +25,10 @@
 
     # Input dependency optimization
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
-    nix-lib.inputs.nixpkgs.follows = "nixpkgs";
-    nix-lib.inputs.crane.follows = "crane";
-    nix-lib.inputs.rust-overlay.follows = "rust-overlay";
     nix-lib.inputs.flake-utils.follows = "flake-utils";
-    # One unstable/treefmt/flake-parts revision for the whole flake. Left
-    # unfollowed, `nix flake update nix-lib` moves nix-lib's private nixpkgs-unstable,
-    # which supplies cargo-llvm-cov to the dev shell, to a revision missing from the
-    # binary cache.
-    nix-lib.inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
     nix-lib.inputs.treefmt-nix.follows = "treefmt-nix";
     nix-lib.inputs.flake-parts.follows = "flake-parts";
     pre-commit.inputs.nixpkgs.follows = "nixpkgs";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -190,7 +184,8 @@
               export GITHUB_TOKEN="''${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}"
             '';
             extraPackages = with pkgs; [
-              cargo-release
+              # From unstable: cargo-release 1.1.7 needs rustc 1.97, release-26.05 ships 1.95.
+              pkgsUnstable.cargo-release
               sqlite
               yq-go
             ];
