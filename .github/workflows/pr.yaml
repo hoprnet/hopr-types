@@ -46,7 +46,7 @@ jobs:
   label:
     name: Add labels
     continue-on-error: true
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: depot-ubuntu-24.04
     permissions:
       contents: read
@@ -114,9 +114,9 @@ jobs:
   checks:
     name: Check
     needs: changes
-    uses: hoprnet/hopr-workflows/.github/workflows/checks.yaml@1476429c0d8c5a6331c50a4655501125051cdbf4 # workflow-checks-v2
+    uses: hoprnet/hopr-workflows/.github/workflows/checks.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # workflow-checks-v3.0.0
     with:
-      source_branch: ${{ github.event.pull_request.head.sha || github.sha }}
+      repo_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       lint_command: "nix run -L .#check"
       audit_command: "nix run .#audit"
       deps: false
@@ -134,12 +134,12 @@ jobs:
     name: Test
     needs: [changes, checks, semver-checks]
     if: ${{ !cancelled() && !failure() }}
-    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
+    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # workflow-tests-v7.0.0
     permissions:
       contents: read
       id-token: write # Codecov OIDC upload in the coverage job
     with:
-      source_branch: ${{ github.event.pull_request.head.sha || github.sha }}
+      repo_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       # Coverage runs the unit tests, so the plain test job is redundant.
       enable_unit_tests: false
       enable_unit_coverage: ${{ needs.changes.outputs.rust == 'true' }}
@@ -165,13 +165,12 @@ jobs:
           - architecture: aarch64-darwin
             runner: depot-macos-15
             required_label: "binary:aarch64-darwin"
-    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@bfdfd56e110ee356595faac1424b74906ed50ac9 # build-library-v3.3.2
+    uses: hoprnet/hopr-workflows/.github/workflows/build-library.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # build-library-v4.0.0
     permissions:
       contents: read
       id-token: write
     with:
-      # A branch name, not a SHA: cargo release rejects a detached HEAD.
-      source_branch: ${{ github.event.pull_request.head.ref || github.ref }}
+      repo_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       version_type: commit
       architecture: ${{ matrix.architecture }}
       package_name: hopr-types
@@ -191,22 +190,22 @@ jobs:
       contents: read
     steps:
       - name: Check semver
-        uses: hoprnet/hopr-workflows/actions/nix-action@ff4c0b7afc400ee6cf217841dc576f8a1289bcc0 # nix-action-v1.2.1
+        uses: hoprnet/hopr-workflows/actions/nix-action@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # nix-action-v2.0.0
         with:
-          source_branch: ${{ github.event.pull_request.head.sha }}
+          repo_sha: ${{ github.event.pull_request.head.sha }}
           cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           command: "nix run -L .#semver-checks"
   benchmarks:
     name: Benchmarks
     needs: [changes, checks, semver-checks, tests, build-library]
-    if: ${{ !cancelled() && !failure() && github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true' && github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ !cancelled() && !failure() && github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true' }}
     permissions:
       contents: read
       checks: write
       pull-requests: write
-    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
+    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # workflow-benchmarks-v3.0.0
     with:
-      source_branch: ${{ github.event.pull_request.head.ref }}
+      repo_sha: ${{ github.event.pull_request.head.sha }}
       runner: depot-ubuntu-24.04-4
       bencher_project: ${{ github.event.repository.name }}
       # Re-enabled to track the public-key benchmarks through the compact/expanded

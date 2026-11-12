@@ -14,9 +14,9 @@ jobs:
     permissions:
       contents: read
       id-token: write # Codecov OIDC upload
-    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@2f28adfb7c34a9f18087d8646e190b6aafcd4b52 # workflow-tests-v6
+    uses: hoprnet/hopr-workflows/.github/workflows/tests.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # workflow-tests-v7.0.0
     with:
-      source_branch: ${{ github.sha }}
+      repo_sha: ${{ github.sha }}
       enable_unit_tests: false
       enable_integration_tests: false
       enable_unit_coverage: true
@@ -31,9 +31,9 @@ jobs:
       contents: read
       checks: write
       pull-requests: write
-    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@c06be87b06af5bfcc48d98ebe95787c994e2d2c0 # workflow-benchmark-v1
+    uses: hoprnet/hopr-workflows/.github/workflows/benchmarks.yaml@43c833e72dffe4f2f3be60193733e5657f8aa0d7 # workflow-benchmarks-v3.0.0
     with:
-      source_branch: ${{ github.ref_name }}
+      repo_sha: ${{ github.sha }}
       runner: depot-ubuntu-24.04-4
       bencher_project: ${{ github.event.repository.name }}
       # Re-enabled to track the public-key benchmarks through the compact/expanded
