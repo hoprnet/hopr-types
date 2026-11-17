@@ -5,7 +5,7 @@ use std::sync::{
 
 use opentelemetry::{
     KeyValue,
-    metrics::{Counter, Histogram, MeterProvider as _, UpDownCounter},
+    metrics::{Counter, Gauge, Histogram, MeterProvider as _},
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 
@@ -303,7 +303,7 @@ impl MultiCounter {
 /// Represents a simple gauge with floating point values.
 pub struct SimpleGauge {
     name: String,
-    gauge: UpDownCounter<f64>,
+    gauge: Gauge<f64>,
     shadow: AtomicF64,
 }
 
@@ -311,7 +311,7 @@ impl SimpleGauge {
     /// Creates a new gauge with given name and description.
     pub fn new(name: &str, description: &str) -> MetricResult<Self> {
         let gauge = meter_for_metric(name)
-            .f64_up_down_counter(name.to_string())
+            .f64_gauge(name.to_string())
             .with_description(description.to_string())
             .build();
         Ok(Self {
@@ -323,20 +323,20 @@ impl SimpleGauge {
 
     /// Increments the gauge by the given value.
     pub fn increment(&self, by: f64) {
-        self.gauge.add(by, &[]);
-        self.shadow.fetch_add(by);
+        let new_value = self.shadow.fetch_add(by);
+        self.gauge.record(new_value, &[]);
     }
 
     /// Decrements the gauge by the given value.
     pub fn decrement(&self, by: f64) {
-        self.gauge.add(-by, &[]);
-        self.shadow.fetch_add(-by);
+        let new_value = self.shadow.fetch_add(-by);
+        self.gauge.record(new_value, &[]);
     }
 
     /// Sets the gauge to the given value.
     pub fn set(&self, value: f64) {
-        let previous = self.shadow.swap(value);
-        self.gauge.add(value - previous, &[]);
+        self.shadow.swap(value);
+        self.gauge.record(value, &[]);
     }
 
     /// Retrieves the value of the gauge.
@@ -358,7 +358,7 @@ impl SimpleGauge {
 pub struct MultiGauge {
     name: String,
     labels: Vec<String>,
-    gauge: UpDownCounter<f64>,
+    gauge: Gauge<f64>,
     shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, AtomicF64>>,
 }
 
@@ -371,7 +371,7 @@ impl MultiGauge {
             ));
         }
         let gauge = meter_for_metric(name)
-            .f64_up_down_counter(name.to_string())
+            .f64_gauge(name.to_string())
             .with_description(description.to_string())
             .build();
         Ok(Self {
@@ -402,24 +402,24 @@ impl MultiGauge {
     /// Increments gauge with given labels by the given number.
     pub fn increment(&self, label_values: &[&str], by: f64) {
         let attrs = labels_to_attributes(&self.labels, label_values);
-        self.gauge.add(by, &attrs);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let read = self.shadow.read().unwrap();
         if let Some(v) = read.get(&key) {
-            v.fetch_add(by);
+            let new_value = v.fetch_add(by);
+            self.gauge.record(new_value, &attrs);
         }
     }
 
     /// Decrements gauge with given labels by the given number.
     pub fn decrement(&self, label_values: &[&str], by: f64) {
         let attrs = labels_to_attributes(&self.labels, label_values);
-        self.gauge.add(-by, &attrs);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let read = self.shadow.read().unwrap();
         if let Some(v) = read.get(&key) {
-            v.fetch_add(-by);
+            let new_value = v.fetch_add(-by);
+            self.gauge.record(new_value, &attrs);
         }
     }
 
@@ -430,8 +430,8 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let read = self.shadow.read().unwrap();
         if let Some(v) = read.get(&key) {
-            let previous = v.swap(value);
-            self.gauge.add(value - previous, &attrs);
+            v.swap(value);
+            self.gauge.record(value, &attrs);
         }
     }
 
@@ -612,6 +612,21 @@ mod tests {
 
     use super::*;
 
+    /// Parses the exported value of the single sample of the given metric name.
+    fn exported_value(metrics: &str, metric_name: &str) -> anyhow::Result<f64> {
+        let with_labels = format!("{metric_name}{{");
+        let without_labels = format!("{metric_name} ");
+        let line = metrics
+            .lines()
+            .find(|line| line.starts_with(&with_labels) || line.starts_with(&without_labels))
+            .with_context(|| format!("metric {metric_name} must be exported"))?;
+        line.split_whitespace()
+            .last()
+            .context("exported line must end with a value")?
+            .parse::<f64>()
+            .context("exported value must parse as f64")
+    }
+
     #[test]
     fn simple_counter() -> anyhow::Result<()> {
         let counter = SimpleCounter::new("otel_my_ctr", "test counter")?;
@@ -702,6 +717,66 @@ mod tests {
             "Prometheus text must contain multi gauge name"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_exact_last_value_when_set_sequence_ends_in_zero() -> anyhow::Result<()>
+    {
+        let simple = SimpleGauge::new("otel_gauge_exact_simple", "test exact gauge")?;
+        for value in [22.33, 649.55, 9.21] {
+            simple.set(value);
+        }
+        simple.set(0.0);
+
+        let multi = MultiGauge::new(
+            "otel_gauge_exact_multi",
+            "test exact multigauge",
+            &["version"],
+        )?;
+        for value in [729.17, 21.52, 9.93] {
+            multi.set(&["1.90.1"], value);
+        }
+        multi.set(&["1.90.1"], 0.0);
+
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        assert_eq!(0.0, exported_value(&metrics, "otel_gauge_exact_simple")?);
+        assert_eq!(0.0, exported_value(&metrics, "otel_gauge_exact_multi")?);
+        assert!(
+            metrics.contains("# TYPE otel_gauge_exact_simple gauge"),
+            "Prometheus text must declare the simple gauge type"
+        );
+        assert!(
+            metrics.contains("# TYPE otel_gauge_exact_multi gauge"),
+            "Prometheus text must declare the multigauge type"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_absolute_value_when_incremented_or_decremented() -> anyhow::Result<()> {
+        let simple = SimpleGauge::new("otel_gauge_abs_simple", "test absolute gauge")?;
+        simple.increment(0.1);
+        simple.increment(0.2);
+        simple.decrement(0.1);
+
+        let multi = MultiGauge::new(
+            "otel_gauge_abs_multi",
+            "test absolute multigauge",
+            &["version"],
+        )?;
+        multi.increment(&["1.90.1"], 0.1);
+        multi.increment(&["1.90.1"], 0.2);
+        multi.decrement(&["1.90.1"], 0.1);
+
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        let simple_exported = exported_value(&metrics, "otel_gauge_abs_simple")?;
+        assert_eq!(simple.get(), simple_exported);
+        let multi_exported = exported_value(&metrics, "otel_gauge_abs_multi")?;
+        assert_eq!(
+            multi.get(&["1.90.1"]).context("must be present")?,
+            multi_exported
+        );
         Ok(())
     }
 
