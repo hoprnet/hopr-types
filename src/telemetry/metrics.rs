@@ -309,6 +309,7 @@ pub struct SimpleGauge {
     name: String,
     gauge: Gauge<f64>,
     shadow: AtomicF64,
+    record_order: std::sync::Mutex<()>,
 }
 
 impl SimpleGauge {
@@ -322,23 +323,36 @@ impl SimpleGauge {
             name: name.to_string(),
             gauge,
             shadow: AtomicF64::new(0.0),
+            record_order: std::sync::Mutex::new(()),
         })
     }
 
     /// Increments the gauge by the given value.
     pub fn increment(&self, by: f64) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
         let new_value = self.shadow.fetch_add(by);
         self.gauge.record(new_value, &[]);
     }
 
     /// Decrements the gauge by the given value.
     pub fn decrement(&self, by: f64) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
         let new_value = self.shadow.fetch_add(-by);
         self.gauge.record(new_value, &[]);
     }
 
     /// Sets the gauge to the given value.
     pub fn set(&self, value: f64) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
         self.shadow.swap(value);
         self.gauge.record(value, &[]);
     }
@@ -364,6 +378,7 @@ pub struct MultiGauge {
     labels: Vec<String>,
     gauge: Gauge<f64>,
     shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, AtomicF64>>,
+    record_order: std::sync::Mutex<()>,
 }
 
 impl MultiGauge {
@@ -383,6 +398,7 @@ impl MultiGauge {
             labels: labels.iter().map(|s| s.to_string()).collect(),
             gauge,
             shadow: std::sync::RwLock::new(std::collections::HashMap::new()),
+            record_order: std::sync::Mutex::new(()),
         })
     }
 
@@ -408,8 +424,12 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
+        let series = self.shadow.read().unwrap();
+        if let Some(v) = series.get(&key) {
             let new_value = v.fetch_add(by);
             self.gauge.record(new_value, &attrs);
         }
@@ -420,8 +440,12 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
+        let series = self.shadow.read().unwrap();
+        if let Some(v) = series.get(&key) {
             let new_value = v.fetch_add(-by);
             self.gauge.record(new_value, &attrs);
         }
@@ -432,8 +456,12 @@ impl MultiGauge {
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let attrs = labels_to_attributes(&self.labels, label_values);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
+        let _order = self
+            .record_order
+            .lock()
+            .expect("record order lock must not be poisoned");
+        let series = self.shadow.read().unwrap();
+        if let Some(v) = series.get(&key) {
             v.swap(value);
             self.gauge.record(value, &attrs);
         }
@@ -616,17 +644,29 @@ mod tests {
 
     use super::*;
 
-    /// Parses the exported value of the single sample of the given metric name.
-    fn exported_value(metrics: &str, metric_name: &str) -> anyhow::Result<f64> {
-        let with_labels = format!("{metric_name}{{");
-        let without_labels = format!("{metric_name} ");
+    /// Parses the exported value of the sample with the given metric name and label set.
+    fn exported_value(
+        metrics: &str,
+        metric_name: &str,
+        labels: &[(&str, &str)],
+    ) -> anyhow::Result<f64> {
+        let mut prefix = metric_name.to_string();
+        if !labels.is_empty() {
+            let rendered = labels
+                .iter()
+                .map(|(key, value)| format!("{key}=\"{value}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+            prefix.push_str(&format!("{{{rendered}}}"));
+        }
+        prefix.push(' ');
+
         let line = metrics
             .lines()
-            .find(|line| line.starts_with(&with_labels) || line.starts_with(&without_labels))
-            .with_context(|| format!("metric {metric_name} must be exported"))?;
-        line.split_whitespace()
-            .last()
-            .context("exported line must end with a value")?
+            .find(|line| line.starts_with(&prefix))
+            .with_context(|| format!("sample {prefix} must be exported"))?;
+        line[prefix.len()..]
+            .trim()
             .parse::<f64>()
             .context("exported value must parse as f64")
     }
@@ -744,8 +784,14 @@ mod tests {
         multi.set(&["1.90.1"], 0.0);
 
         let metrics = gather_all_metrics().context("gather_all_metrics")?;
-        assert_eq!(0.0, exported_value(&metrics, "otel_gauge_exact_simple")?);
-        assert_eq!(0.0, exported_value(&metrics, "otel_gauge_exact_multi")?);
+        assert_eq!(
+            0.0,
+            exported_value(&metrics, "otel_gauge_exact_simple", &[])?
+        );
+        assert_eq!(
+            0.0,
+            exported_value(&metrics, "otel_gauge_exact_multi", &[("version", "1.90.1")])?
+        );
         assert!(
             metrics.contains("# TYPE otel_gauge_exact_simple gauge"),
             "Prometheus text must declare the simple gauge type"
@@ -774,12 +820,63 @@ mod tests {
         multi.decrement(&["1.90.1"], 0.1);
 
         let metrics = gather_all_metrics().context("gather_all_metrics")?;
-        let simple_exported = exported_value(&metrics, "otel_gauge_abs_simple")?;
+        let simple_exported = exported_value(&metrics, "otel_gauge_abs_simple", &[])?;
         assert_eq!(simple.get(), simple_exported);
-        let multi_exported = exported_value(&metrics, "otel_gauge_abs_multi")?;
+        let multi_exported =
+            exported_value(&metrics, "otel_gauge_abs_multi", &[("version", "1.90.1")])?;
         assert_eq!(
             multi.get(&["1.90.1"]).context("must be present")?,
             multi_exported
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_exact_value_when_updated_concurrently() -> anyhow::Result<()> {
+        use std::sync::Arc;
+
+        const THREADS: usize = 8;
+        const UPDATES: usize = 250;
+
+        let simple = Arc::new(SimpleGauge::new(
+            "otel_gauge_concurrent_simple",
+            "test concurrent gauge",
+        )?);
+        let multi = Arc::new(MultiGauge::new(
+            "otel_gauge_concurrent_multi",
+            "test concurrent multigauge",
+            &["version"],
+        )?);
+
+        let handles = (0..THREADS)
+            .map(|_| {
+                let simple = Arc::clone(&simple);
+                let multi = Arc::clone(&multi);
+                std::thread::spawn(move || {
+                    for _ in 0..UPDATES {
+                        simple.increment(1.0);
+                        multi.increment(&["1.90.1"], 1.0);
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle.join().expect("update thread must not panic");
+        }
+
+        let expected = (THREADS * UPDATES) as f64;
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        assert_eq!(
+            expected,
+            exported_value(&metrics, "otel_gauge_concurrent_simple", &[])?
+        );
+        assert_eq!(
+            expected,
+            exported_value(
+                &metrics,
+                "otel_gauge_concurrent_multi",
+                &[("version", "1.90.1")]
+            )?
         );
         Ok(())
     }
