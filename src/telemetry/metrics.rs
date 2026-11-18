@@ -5,7 +5,7 @@ use std::sync::{
 
 use opentelemetry::{
     KeyValue,
-    metrics::{Counter, Histogram, MeterProvider as _, UpDownCounter},
+    metrics::{Counter, Gauge, Histogram, MeterProvider as _},
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 
@@ -161,7 +161,6 @@ fn labels_to_attributes(keys: &[String], values: &[&str]) -> Vec<KeyValue> {
 
 /// Stores an `f64` in an `AtomicU64` via bit reinterpretation.
 struct AtomicF64(AtomicU64);
-
 impl AtomicF64 {
     fn new(val: f64) -> Self {
         Self(AtomicU64::new(val.to_bits()))
@@ -176,6 +175,10 @@ impl AtomicF64 {
         f64::from_bits(self.0.swap(new.to_bits(), Ordering::Relaxed))
     }
 
+    /// Atomically adds the delta and returns the resulting value.
+    ///
+    /// Unlike `AtomicU64::fetch_add`, this returns the new value, not the
+    /// previous one.
     fn fetch_add(&self, delta: f64) -> f64 {
         loop {
             let current = self.0.load(Ordering::Relaxed);
@@ -297,46 +300,104 @@ impl MultiCounter {
 }
 
 // ---------------------------------------------------------------------------
+// GaugeSeries
+// ---------------------------------------------------------------------------
+
+/// Shadow of one gauge series, with the update tokens that keep the exported
+/// sample in step with the shadow value.
+struct GaugeSeries {
+    value: AtomicF64,
+    update: AtomicU64,
+    recorded: AtomicU64,
+}
+
+impl GaugeSeries {
+    fn new() -> Self {
+        Self {
+            value: AtomicF64::new(0.0),
+            update: AtomicU64::new(0),
+            recorded: AtomicU64::new(0),
+        }
+    }
+
+    fn load(&self) -> f64 {
+        self.value.load()
+    }
+
+    fn add(&self, delta: f64) {
+        self.value.fetch_add(delta);
+    }
+
+    fn set(&self, value: f64) {
+        self.value.swap(value);
+    }
+
+    /// Takes the token of the next update.
+    fn begin_update(&self) -> u64 {
+        self.update.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Records the shadow value when this update is newer than the last record.
+    ///
+    /// The SDK keeps the last recorded measurement, so an update that already
+    /// lost to a newer record must not replace that sample.
+    ///
+    /// The check and the record are separate steps. A record that loses a race to
+    /// a newer update can therefore leave a sample one update old. The next
+    /// update repairs it.
+    fn record_update(&self, update: u64, gauge: &Gauge<f64>, attrs: &[KeyValue]) {
+        if self.recorded.load(Ordering::Relaxed) >= update {
+            return;
+        }
+        gauge.record(self.load(), attrs);
+        self.recorded.store(update, Ordering::Relaxed);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SimpleGauge
 // ---------------------------------------------------------------------------
 
 /// Represents a simple gauge with floating point values.
 pub struct SimpleGauge {
     name: String,
-    gauge: UpDownCounter<f64>,
-    shadow: AtomicF64,
+    gauge: Gauge<f64>,
+    shadow: GaugeSeries,
 }
 
 impl SimpleGauge {
     /// Creates a new gauge with given name and description.
     pub fn new(name: &str, description: &str) -> MetricResult<Self> {
         let gauge = meter_for_metric(name)
-            .f64_up_down_counter(name.to_string())
+            .f64_gauge(name.to_string())
             .with_description(description.to_string())
             .build();
         Ok(Self {
             name: name.to_string(),
             gauge,
-            shadow: AtomicF64::new(0.0),
+            shadow: GaugeSeries::new(),
         })
     }
 
     /// Increments the gauge by the given value.
     pub fn increment(&self, by: f64) {
-        self.gauge.add(by, &[]);
-        self.shadow.fetch_add(by);
+        self.shadow.add(by);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Decrements the gauge by the given value.
     pub fn decrement(&self, by: f64) {
-        self.gauge.add(-by, &[]);
-        self.shadow.fetch_add(-by);
+        self.shadow.add(-by);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Sets the gauge to the given value.
     pub fn set(&self, value: f64) {
-        let previous = self.shadow.swap(value);
-        self.gauge.add(value - previous, &[]);
+        self.shadow.set(value);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Retrieves the value of the gauge.
@@ -358,8 +419,8 @@ impl SimpleGauge {
 pub struct MultiGauge {
     name: String,
     labels: Vec<String>,
-    gauge: UpDownCounter<f64>,
-    shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, AtomicF64>>,
+    gauge: Gauge<f64>,
+    shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, GaugeSeries>>,
 }
 
 impl MultiGauge {
@@ -371,7 +432,7 @@ impl MultiGauge {
             ));
         }
         let gauge = meter_for_metric(name)
-            .f64_up_down_counter(name.to_string())
+            .f64_gauge(name.to_string())
             .with_description(description.to_string())
             .build();
         Ok(Self {
@@ -394,32 +455,32 @@ impl MultiGauge {
             }
         }
         let mut write = self.shadow.write().unwrap();
-        write
-            .entry(key.to_vec())
-            .or_insert_with(|| AtomicF64::new(0.0));
+        write.entry(key.to_vec()).or_insert_with(GaugeSeries::new);
     }
 
     /// Increments gauge with given labels by the given number.
     pub fn increment(&self, label_values: &[&str], by: f64) {
         let attrs = labels_to_attributes(&self.labels, label_values);
-        self.gauge.add(by, &attrs);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
-            v.fetch_add(by);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.add(by);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
     /// Decrements gauge with given labels by the given number.
     pub fn decrement(&self, label_values: &[&str], by: f64) {
         let attrs = labels_to_attributes(&self.labels, label_values);
-        self.gauge.add(-by, &attrs);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
-            v.fetch_add(-by);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.add(-by);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
@@ -428,18 +489,19 @@ impl MultiGauge {
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let attrs = labels_to_attributes(&self.labels, label_values);
-        let read = self.shadow.read().unwrap();
-        if let Some(v) = read.get(&key) {
-            let previous = v.swap(value);
-            self.gauge.add(value - previous, &attrs);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.set(value);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
     /// Retrieves the value of the specified gauge.
     pub fn get(&self, label_values: &[&str]) -> Option<f64> {
         let key = self.shadow_entry(label_values);
-        let read = self.shadow.read().unwrap();
-        read.get(&key).map(|v| v.load())
+        let entries = self.shadow.read().unwrap();
+        entries.get(&key).map(GaugeSeries::load)
     }
 
     /// Returns the name of the gauge vector given at construction.
@@ -612,6 +674,33 @@ mod tests {
 
     use super::*;
 
+    /// Parses the exported value of the sample with the given metric name and label set.
+    fn exported_value(
+        metrics: &str,
+        metric_name: &str,
+        labels: &[(&str, &str)],
+    ) -> anyhow::Result<f64> {
+        let mut prefix = metric_name.to_string();
+        if !labels.is_empty() {
+            let rendered = labels
+                .iter()
+                .map(|(key, value)| format!("{key}=\"{value}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+            prefix.push_str(&format!("{{{rendered}}}"));
+        }
+        prefix.push(' ');
+
+        let line = metrics
+            .lines()
+            .find(|line| line.starts_with(&prefix))
+            .with_context(|| format!("sample {prefix} must be exported"))?;
+        line[prefix.len()..]
+            .trim()
+            .parse::<f64>()
+            .context("exported value must parse as f64")
+    }
+
     #[test]
     fn simple_counter() -> anyhow::Result<()> {
         let counter = SimpleCounter::new("otel_my_ctr", "test counter")?;
@@ -702,6 +791,123 @@ mod tests {
             "Prometheus text must contain multi gauge name"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_exact_last_value_when_set_sequence_ends_in_zero() -> anyhow::Result<()>
+    {
+        let simple = SimpleGauge::new("otel_gauge_exact_simple", "test exact gauge")?;
+        for value in [22.33, 649.55, 9.21] {
+            simple.set(value);
+        }
+        simple.set(0.0);
+
+        let multi = MultiGauge::new(
+            "otel_gauge_exact_multi",
+            "test exact multigauge",
+            &["version"],
+        )?;
+        for value in [729.17, 21.52, 9.93] {
+            multi.set(&["1.90.1"], value);
+        }
+        multi.set(&["1.90.1"], 0.0);
+
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        assert_eq!(
+            0.0,
+            exported_value(&metrics, "otel_gauge_exact_simple", &[])?
+        );
+        assert_eq!(
+            0.0,
+            exported_value(&metrics, "otel_gauge_exact_multi", &[("version", "1.90.1")])?
+        );
+        assert!(
+            metrics.contains("# TYPE otel_gauge_exact_simple gauge"),
+            "Prometheus text must declare the simple gauge type"
+        );
+        assert!(
+            metrics.contains("# TYPE otel_gauge_exact_multi gauge"),
+            "Prometheus text must declare the multigauge type"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_absolute_value_when_incremented_or_decremented() -> anyhow::Result<()> {
+        let simple = SimpleGauge::new("otel_gauge_abs_simple", "test absolute gauge")?;
+        simple.increment(0.1);
+        simple.increment(0.2);
+        simple.decrement(0.1);
+
+        let multi = MultiGauge::new(
+            "otel_gauge_abs_multi",
+            "test absolute multigauge",
+            &["version"],
+        )?;
+        multi.increment(&["1.90.1"], 0.1);
+        multi.increment(&["1.90.1"], 0.2);
+        multi.decrement(&["1.90.1"], 0.1);
+
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        let simple_exported = exported_value(&metrics, "otel_gauge_abs_simple", &[])?;
+        assert_eq!(simple.get(), simple_exported);
+        let multi_exported =
+            exported_value(&metrics, "otel_gauge_abs_multi", &[("version", "1.90.1")])?;
+        assert_eq!(
+            multi.get(&["1.90.1"]).context("must be present")?,
+            multi_exported
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn gauges_should_export_exact_value_when_updated_concurrently() -> anyhow::Result<()> {
+        use std::sync::Arc;
+
+        const THREADS: usize = 8;
+        const UPDATES: usize = 250;
+
+        let simple = Arc::new(SimpleGauge::new(
+            "otel_gauge_concurrent_simple",
+            "test concurrent gauge",
+        )?);
+        let multi = Arc::new(MultiGauge::new(
+            "otel_gauge_concurrent_multi",
+            "test concurrent multigauge",
+            &["version"],
+        )?);
+
+        let handles = (0..THREADS)
+            .map(|_| {
+                let simple = Arc::clone(&simple);
+                let multi = Arc::clone(&multi);
+                std::thread::spawn(move || {
+                    for _ in 0..UPDATES {
+                        simple.increment(1.0);
+                        multi.increment(&["1.90.1"], 1.0);
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle.join().expect("update thread must not panic");
+        }
+
+        let expected = (THREADS * UPDATES) as f64;
+        let metrics = gather_all_metrics().context("gather_all_metrics")?;
+        assert_eq!(
+            expected,
+            exported_value(&metrics, "otel_gauge_concurrent_simple", &[])?
+        );
+        assert_eq!(
+            expected,
+            exported_value(
+                &metrics,
+                "otel_gauge_concurrent_multi",
+                &[("version", "1.90.1")]
+            )?
+        );
         Ok(())
     }
 
