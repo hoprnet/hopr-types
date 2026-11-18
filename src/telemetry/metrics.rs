@@ -161,7 +161,6 @@ fn labels_to_attributes(keys: &[String], values: &[&str]) -> Vec<KeyValue> {
 
 /// Stores an `f64` in an `AtomicU64` via bit reinterpretation.
 struct AtomicF64(AtomicU64);
-
 impl AtomicF64 {
     fn new(val: f64) -> Self {
         Self(AtomicU64::new(val.to_bits()))
@@ -179,7 +178,7 @@ impl AtomicF64 {
     /// Atomically adds the delta and returns the resulting value.
     ///
     /// Unlike `AtomicU64::fetch_add`, this returns the new value, not the
-    /// previous one. Gauge recording relies on that to export the absolute value.
+    /// previous one.
     fn fetch_add(&self, delta: f64) -> f64 {
         loop {
             let current = self.0.load(Ordering::Relaxed);
@@ -301,6 +300,61 @@ impl MultiCounter {
 }
 
 // ---------------------------------------------------------------------------
+// GaugeSeries
+// ---------------------------------------------------------------------------
+
+/// Shadow of one gauge series, with the update tokens that keep the exported
+/// sample in step with the shadow value.
+struct GaugeSeries {
+    value: AtomicF64,
+    update: AtomicU64,
+    recorded: AtomicU64,
+}
+
+impl GaugeSeries {
+    fn new() -> Self {
+        Self {
+            value: AtomicF64::new(0.0),
+            update: AtomicU64::new(0),
+            recorded: AtomicU64::new(0),
+        }
+    }
+
+    fn load(&self) -> f64 {
+        self.value.load()
+    }
+
+    fn add(&self, delta: f64) {
+        self.value.fetch_add(delta);
+    }
+
+    fn set(&self, value: f64) {
+        self.value.swap(value);
+    }
+
+    /// Takes the token of the next update.
+    fn begin_update(&self) -> u64 {
+        self.update.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Records the shadow value when this update is newer than the last record.
+    ///
+    /// The SDK keeps the last recorded measurement, so an update that already
+    /// lost to a newer record must not replace that sample.
+    ///
+    /// The check and the record are separate steps. A record that loses a race to
+    /// a newer update can therefore leave a sample one update old. The next
+    /// update repairs it.
+    fn record_update(&self, update: u64, gauge: &Gauge<f64>, attrs: &[KeyValue]) {
+        if self.recorded.load(Ordering::Relaxed) >= update {
+            return;
+        }
+        gauge.record(self.load(), attrs);
+        self.recorded.store(update, Ordering::Relaxed);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SimpleGauge
 // ---------------------------------------------------------------------------
 
@@ -308,7 +362,7 @@ impl MultiCounter {
 pub struct SimpleGauge {
     name: String,
     gauge: Gauge<f64>,
-    shadow: AtomicF64,
+    shadow: GaugeSeries,
 }
 
 impl SimpleGauge {
@@ -321,42 +375,29 @@ impl SimpleGauge {
         Ok(Self {
             name: name.to_string(),
             gauge,
-            shadow: AtomicF64::new(0.0),
+            shadow: GaugeSeries::new(),
         })
-    }
-
-    /// Records the shadow value, retrying until no newer update exists.
-    ///
-    /// The SDK keeps the last recorded measurement. A record that races with a
-    /// newer update must therefore repeat with the newer shadow value, or the
-    /// exported sample stays stale. No lock is needed: each round records the
-    /// value it has just read.
-    fn record_shadow(&self) {
-        loop {
-            let value = self.shadow.load();
-            self.gauge.record(value, &[]);
-            if self.shadow.load().to_bits() == value.to_bits() {
-                return;
-            }
-        }
     }
 
     /// Increments the gauge by the given value.
     pub fn increment(&self, by: f64) {
-        self.shadow.fetch_add(by);
-        self.record_shadow();
+        self.shadow.add(by);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Decrements the gauge by the given value.
     pub fn decrement(&self, by: f64) {
-        self.shadow.fetch_add(-by);
-        self.record_shadow();
+        self.shadow.add(-by);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Sets the gauge to the given value.
     pub fn set(&self, value: f64) {
-        self.shadow.swap(value);
-        self.record_shadow();
+        self.shadow.set(value);
+        let update = self.shadow.begin_update();
+        self.shadow.record_update(update, &self.gauge, &[]);
     }
 
     /// Retrieves the value of the gauge.
@@ -379,7 +420,7 @@ pub struct MultiGauge {
     name: String,
     labels: Vec<String>,
     gauge: Gauge<f64>,
-    shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, AtomicF64>>,
+    shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, GaugeSeries>>,
 }
 
 impl MultiGauge {
@@ -414,22 +455,7 @@ impl MultiGauge {
             }
         }
         let mut write = self.shadow.write().unwrap();
-        write
-            .entry(key.to_vec())
-            .or_insert_with(|| AtomicF64::new(0.0));
-    }
-
-    /// Records one series value, retrying until no newer update exists.
-    ///
-    /// See [`SimpleGauge::record_shadow`] for the reason of the retry.
-    fn record_series(&self, shadow: &AtomicF64, attrs: &[KeyValue]) {
-        loop {
-            let value = shadow.load();
-            self.gauge.record(value, attrs);
-            if shadow.load().to_bits() == value.to_bits() {
-                return;
-            }
-        }
+        write.entry(key.to_vec()).or_insert_with(GaugeSeries::new);
     }
 
     /// Increments gauge with given labels by the given number.
@@ -437,10 +463,11 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let series = self.shadow.read().unwrap();
-        if let Some(shadow) = series.get(&key) {
-            shadow.fetch_add(by);
-            self.record_series(shadow, &attrs);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.add(by);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
@@ -449,10 +476,11 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let series = self.shadow.read().unwrap();
-        if let Some(shadow) = series.get(&key) {
-            shadow.fetch_add(-by);
-            self.record_series(shadow, &attrs);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.add(-by);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
@@ -461,18 +489,19 @@ impl MultiGauge {
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let attrs = labels_to_attributes(&self.labels, label_values);
-        let series = self.shadow.read().unwrap();
-        if let Some(shadow) = series.get(&key) {
-            shadow.swap(value);
-            self.record_series(shadow, &attrs);
+        let entries = self.shadow.read().unwrap();
+        if let Some(series) = entries.get(&key) {
+            series.set(value);
+            let update = series.begin_update();
+            series.record_update(update, &self.gauge, &attrs);
         }
     }
 
     /// Retrieves the value of the specified gauge.
     pub fn get(&self, label_values: &[&str]) -> Option<f64> {
         let key = self.shadow_entry(label_values);
-        let read = self.shadow.read().unwrap();
-        read.get(&key).map(|v| v.load())
+        let entries = self.shadow.read().unwrap();
+        entries.get(&key).map(GaugeSeries::load)
     }
 
     /// Returns the name of the gauge vector given at construction.
