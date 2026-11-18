@@ -176,6 +176,10 @@ impl AtomicF64 {
         f64::from_bits(self.0.swap(new.to_bits(), Ordering::Relaxed))
     }
 
+    /// Atomically adds the delta and returns the resulting value.
+    ///
+    /// Unlike `AtomicU64::fetch_add`, this returns the new value, not the
+    /// previous one. Gauge recording relies on that to export the absolute value.
     fn fetch_add(&self, delta: f64) -> f64 {
         loop {
             let current = self.0.load(Ordering::Relaxed);
