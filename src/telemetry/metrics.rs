@@ -309,7 +309,6 @@ pub struct SimpleGauge {
     name: String,
     gauge: Gauge<f64>,
     shadow: AtomicF64,
-    record_order: std::sync::Mutex<()>,
 }
 
 impl SimpleGauge {
@@ -323,38 +322,41 @@ impl SimpleGauge {
             name: name.to_string(),
             gauge,
             shadow: AtomicF64::new(0.0),
-            record_order: std::sync::Mutex::new(()),
         })
+    }
+
+    /// Records the shadow value, retrying until no newer update exists.
+    ///
+    /// The SDK keeps the last recorded measurement. A record that races with a
+    /// newer update must therefore repeat with the newer shadow value, or the
+    /// exported sample stays stale. No lock is needed: each round records the
+    /// value it has just read.
+    fn record_shadow(&self) {
+        loop {
+            let value = self.shadow.load();
+            self.gauge.record(value, &[]);
+            if self.shadow.load().to_bits() == value.to_bits() {
+                return;
+            }
+        }
     }
 
     /// Increments the gauge by the given value.
     pub fn increment(&self, by: f64) {
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
-        let new_value = self.shadow.fetch_add(by);
-        self.gauge.record(new_value, &[]);
+        self.shadow.fetch_add(by);
+        self.record_shadow();
     }
 
     /// Decrements the gauge by the given value.
     pub fn decrement(&self, by: f64) {
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
-        let new_value = self.shadow.fetch_add(-by);
-        self.gauge.record(new_value, &[]);
+        self.shadow.fetch_add(-by);
+        self.record_shadow();
     }
 
     /// Sets the gauge to the given value.
     pub fn set(&self, value: f64) {
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
         self.shadow.swap(value);
-        self.gauge.record(value, &[]);
+        self.record_shadow();
     }
 
     /// Retrieves the value of the gauge.
@@ -378,7 +380,6 @@ pub struct MultiGauge {
     labels: Vec<String>,
     gauge: Gauge<f64>,
     shadow: std::sync::RwLock<std::collections::HashMap<Vec<String>, AtomicF64>>,
-    record_order: std::sync::Mutex<()>,
 }
 
 impl MultiGauge {
@@ -398,7 +399,6 @@ impl MultiGauge {
             labels: labels.iter().map(|s| s.to_string()).collect(),
             gauge,
             shadow: std::sync::RwLock::new(std::collections::HashMap::new()),
-            record_order: std::sync::Mutex::new(()),
         })
     }
 
@@ -419,19 +419,28 @@ impl MultiGauge {
             .or_insert_with(|| AtomicF64::new(0.0));
     }
 
+    /// Records one series value, retrying until no newer update exists.
+    ///
+    /// See [`SimpleGauge::record_shadow`] for the reason of the retry.
+    fn record_series(&self, shadow: &AtomicF64, attrs: &[KeyValue]) {
+        loop {
+            let value = shadow.load();
+            self.gauge.record(value, attrs);
+            if shadow.load().to_bits() == value.to_bits() {
+                return;
+            }
+        }
+    }
+
     /// Increments gauge with given labels by the given number.
     pub fn increment(&self, label_values: &[&str], by: f64) {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
         let series = self.shadow.read().unwrap();
-        if let Some(v) = series.get(&key) {
-            let new_value = v.fetch_add(by);
-            self.gauge.record(new_value, &attrs);
+        if let Some(shadow) = series.get(&key) {
+            shadow.fetch_add(by);
+            self.record_series(shadow, &attrs);
         }
     }
 
@@ -440,14 +449,10 @@ impl MultiGauge {
         let attrs = labels_to_attributes(&self.labels, label_values);
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
         let series = self.shadow.read().unwrap();
-        if let Some(v) = series.get(&key) {
-            let new_value = v.fetch_add(-by);
-            self.gauge.record(new_value, &attrs);
+        if let Some(shadow) = series.get(&key) {
+            shadow.fetch_add(-by);
+            self.record_series(shadow, &attrs);
         }
     }
 
@@ -456,14 +461,10 @@ impl MultiGauge {
         let key = self.shadow_entry(label_values);
         self.ensure_shadow(&key);
         let attrs = labels_to_attributes(&self.labels, label_values);
-        let _order = self
-            .record_order
-            .lock()
-            .expect("record order lock must not be poisoned");
         let series = self.shadow.read().unwrap();
-        if let Some(v) = series.get(&key) {
-            v.swap(value);
-            self.gauge.record(value, &attrs);
+        if let Some(shadow) = series.get(&key) {
+            shadow.swap(value);
+            self.record_series(shadow, &attrs);
         }
     }
 
