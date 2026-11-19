@@ -82,13 +82,15 @@ pub struct NativeEcdsaSigningEngine;
 
 impl EcdsaEngine for NativeEcdsaSigningEngine {
     fn sign_hash(hash: &Hash, chain_keypair: &ChainKeypair) -> Result<RawSignature, CryptoError> {
-        let sk = secp256k1::SecretKey::from_byte_array(chain_keypair.secret().clone().into())
+        let sk = secp256k1::SecretKey::from_secret_bytes(chain_keypair.secret().clone().into())
             .map_err(|_| CryptoError::InvalidInputValue("chain_keypair"))?;
 
-        let sig = secp256k1::global::SECP256K1
-            .sign_ecdsa_recoverable(secp256k1::Message::from_digest(hash.into()), &sk);
+        let sig = secp256k1::ecdsa::RecoverableSignature::sign_ecdsa_recoverable(
+            secp256k1::Message::from_digest(hash.into()),
+            &sk,
+        );
         let (recid, sig) = sig.serialize_compact();
-        Ok((sig, i32::from(recid) as u8))
+        Ok((sig, recid.to_u8()))
     }
 
     fn verify_hash(
@@ -102,9 +104,10 @@ impl EcdsaEngine for NativeEcdsaSigningEngine {
         let sig = secp256k1::ecdsa::Signature::from_compact(&signature.0)
             .map_err(|_| CryptoError::InvalidInputValue("signature"))?;
 
-        Ok(secp256k1::global::SECP256K1
-            .verify_ecdsa(secp256k1::Message::from_digest(hash.into()), &sig, &pk)
-            .is_ok())
+        Ok(
+            secp256k1::ecdsa::verify(&sig, secp256k1::Message::from_digest(hash.into()), &pk)
+                .is_ok(),
+        )
     }
 
     fn recover_from_hash(signature: &RawSignature, hash: &Hash) -> Result<PublicKey, CryptoError> {
@@ -114,8 +117,8 @@ impl EcdsaEngine for NativeEcdsaSigningEngine {
         )
         .map_err(|_| CryptoError::InvalidInputValue("signature"))?;
 
-        let pk = secp256k1::global::SECP256K1
-            .recover_ecdsa(secp256k1::Message::from_digest(hash.into()), &sig)
+        let pk = sig
+            .recover_ecdsa(secp256k1::Message::from_digest(hash.into()))
             .map_err(|_| CryptoError::SignatureVerification)?;
 
         PublicKey::try_from(pk.serialize_uncompressed().as_ref())

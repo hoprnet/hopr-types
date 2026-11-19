@@ -304,13 +304,11 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     .map_err(|_| crate::crypto::errors::CryptoError::InvalidPublicKey)?;
 
     // Compute A = a·G (the redeemer's secp256k1 public key)
-    let secp = secp256k1::global::SECP256K1;
     let A = secp256k1::PublicKey::from_secret_key(
-        secp,
-        &secp256k1::SecretKey::from_byte_array(a_be_bytes).map_err(|_| CalculationError)?,
+        &secp256k1::SecretKey::from_secret_bytes(a_be_bytes).map_err(|_| CalculationError)?,
     );
 
-    let V = B_pk.mul_tweak(secp, &a).map_err(|_| CalculationError)?;
+    let V = B_pk.mul_tweak(&a).map_err(|_| CalculationError)?;
 
     let r = hash2curve::hash_to_scalar::<Secp256k1, ExpandMsgXmd<sha3::Keccak256>, typenum::U48>(
         &[
@@ -325,14 +323,11 @@ pub fn derive_vrf_parameters<T: AsRef<[u8]>>(
     let r_scalar = secp256k1::Scalar::from_be_bytes(r.to_bytes().into())
         .map_err(|_| crate::crypto::errors::CryptoError::InvalidSecretScalar)?;
 
-    let R_v = B_pk
-        .mul_tweak(secp, &r_scalar)
-        .map_err(|_| CalculationError)?;
+    let R_v = B_pk.mul_tweak(&r_scalar).map_err(|_| CalculationError)?;
 
     // R_G = r·G
     let R_g = secp256k1::PublicKey::from_secret_key(
-        secp,
-        &secp256k1::SecretKey::from_byte_array(r.to_bytes().into())
+        &secp256k1::SecretKey::from_secret_bytes(r.to_bytes().into())
             .map_err(|_| CalculationError)?,
     );
 
