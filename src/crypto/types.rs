@@ -1096,14 +1096,14 @@ impl PublicKey {
 
         #[cfg(not(feature = "rust-ecdsa"))]
         {
-            let sk = secp256k1::SecretKey::from_byte_array(
+            let sk = secp256k1::SecretKey::from_secret_bytes(
                 private_key
                     .try_into()
                     .map_err(|_| GeneralError::ParseError("private_key.len".into()))?,
             )
             .map_err(|_| GeneralError::ParseError("private_key".into()))?;
 
-            let pk = secp256k1::PublicKey::from_secret_key_global(&sk);
+            let pk = secp256k1::PublicKey::from_secret_key(&sk);
             affine_point_from_bytes(&pk.serialize_uncompressed())
                 .and_then(|p| {
                     NonIdentity::new(p)
