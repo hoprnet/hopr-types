@@ -117,7 +117,9 @@ in
       (_: {
         postInstall = ''
           mkdir -p $out/bin
-          find target -maxdepth 4 -type f -executable -name '*_bench*' -exec cp {} $out/bin/ \;
+          # Cargo 1.100 moved intermediate artifacts to target/<profile>/build/<pkg>/<hash>/out,
+          # so the search must not be depth-bounded (1.99 and older used target/<profile>/deps).
+          find target -type f -executable -name '*_bench*' -exec cp {} $out/bin/ \;
         '';
       });
 
