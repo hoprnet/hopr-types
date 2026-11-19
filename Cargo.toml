@@ -174,13 +174,13 @@ k256 = { version = "0.14.0", optional = true, features = [
 ] }
 lazy_static = { version = "1.5.1", optional = true }
 # do not update libp2p-identity until new libp2p version
-libp2p-identity = { version = "0.3.1", optional = true, features = [
+libp2p-identity = { version = "0.2.14", optional = true, features = [
   "peerid",
   "ed25519",
   "rand",
 ] }
 # pinned due to libp2p-identity
-multiaddr = { version = "0.19.1", optional = true }
+multiaddr = { version = "0.18.2", optional = true }
 num_enum = { version = "0.7.6", optional = true }
 opentelemetry = { version = "0.33.1", optional = true, features = ["metrics"] }
 opentelemetry_sdk = { version = "0.33.1", optional = true, features = [
@@ -194,7 +194,7 @@ rand = { version = "0.10.4", optional = true, features = ["thread_rng"] }
 rayon = { version = "1.12.0", optional = true }
 regex = { version = "1.13.2", optional = true }
 rlp = { version = "0.6.1", optional = true }
-secp256k1 = { version = "0.33.1", optional = true, default-features = false, features = [
+secp256k1 = { version = "0.31.1", optional = true, default-features = false, features = [
   "alloc",
   "recovery",
   "std",
